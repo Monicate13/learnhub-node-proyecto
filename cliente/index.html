@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Punto 05: Meta títulos y descripciones SEO optimizadas -->
+    <title>LearnHub — Plataforma de Aprendizaje en Programación | UTP</title>
+    <meta name="description" content="Aprende tecnologías de programación demandadas por la industria (Full Stack, Python, React, Cloud) con cursos en video, seguimiento en tiempo real y membresías periódicas." />
+    <meta name="keywords" content="cursos de programacion, react, nodejs, python, data science, membresia learnhub, utp ingenieria de sistemas" />
+    <meta name="author" content="LearnHub Team - UTP San Juan de Lurigancho" />
+    
+    <!-- Punto 08: Geolocalización y ficha institucional -->
+    <meta name="geo.region" content="PE-LIM" />
+    <meta name="geo.placename" content="Lima, Perú" />
+    
+    <!-- Punto 09: Favicon SVG optimizado -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    
+    <!-- Open Graph / Meta etiquetas para compartir en WhatsApp, LinkedIn, redes -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LearnHub — Cursos y Membresías de Programación" />
+    <meta property="og:description" content="Plataforma de educación tecnológica con seguimiento real de progreso y pasarela Sandbox." />
+    <meta property="og:url" content="https://learnhub.pe" />
+    <meta property="og:image" content="/favicon.svg" />
+    
+    <!-- Tipografía Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Punto 06: Datos Estructurados JSON-LD (Schema.org) para Google -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "EducationalOrganization",
+      "name": "LearnHub",
+      "url": "https://learnhub.pe",
+      "logo": "https://learnhub.pe/favicon.svg",
+      "description": "Plataforma web de cursos de programación y seguimiento del aprendizaje.",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Lima",
+        "addressCountry": "PE"
+      }
+    }
+    </script>
+    
+    <!-- Punto 19: Analítica de eventos de usuario (stub para analítica de conversión) -->
+    <script>
+      window.LearnHubAnalytics = {
+        track: function(eventName, data) {
+          console.log('[Analytics Event]', eventName, data || {});
+        }
+      };
+    </script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased selection:bg-violet-600 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

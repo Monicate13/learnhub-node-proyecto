@@ -1,0 +1,9 @@
+# robots.txt para LearnHub (UTP)
+# Punto 07 del Checklist: Indexación controlada para buscadores
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://learnhub.pe/sitemap.xml
