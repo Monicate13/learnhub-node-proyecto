@@ -10,6 +10,7 @@ interface CatalogManagementProps {
   onToggleCourseStatus: (id: number) => void
   onDuplicateCourse: (course: CourseItem) => void
   onDeleteCourse: (id: number) => void
+  onOpenCoursePlayer?: (courseId: number) => void
 }
 
 export default function CatalogManagement({
@@ -20,6 +21,7 @@ export default function CatalogManagement({
   onToggleCourseStatus,
   onDuplicateCourse,
   onDeleteCourse,
+  onOpenCoursePlayer,
 }: CatalogManagementProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Todos')
@@ -176,6 +178,15 @@ export default function CatalogManagement({
                     <div className="text-[10px] text-violet-600 font-semibold">+ Membresía Pro</div>
                   </td>
                   <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                    {onOpenCoursePlayer && (
+                      <button
+                        onClick={() => onOpenCoursePlayer(c.id)}
+                        className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-100 font-bold cursor-pointer"
+                        title="Entrar a ver y gestionar este curso en el Aula Virtual"
+                      >
+                        ▶ Aula Virtual
+                      </button>
+                    )}
                     <button
                       onClick={() => onEditCourse(c)}
                       className="px-2.5 py-1 border border-slate-200 rounded-lg hover:bg-slate-100 font-semibold text-slate-700 cursor-pointer"

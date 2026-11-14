@@ -1,6 +1,22 @@
 import { useState } from 'react'
 import AppNav from '../components/AppNav'
 
+export interface CourseResource {
+  id?: string | number
+  name: string
+  size?: string
+  type: 'pdf' | 'zip' | 'code' | 'link'
+  url?: string
+  lesson?: string
+}
+
+export interface QuizQuestionItem {
+  id: number
+  question: string
+  options: string[]
+  correctIndex: number
+}
+
 export interface CourseItem {
   id: number
   title: string
@@ -21,8 +37,11 @@ export interface CourseItem {
   modules?: {
     title: string
     duration: string
-    lessons: { title: string; time: string; free?: boolean }[]
+    lessons: { title: string; time: string; free?: boolean; video_url?: string; description?: string }[]
   }[]
+  recursos?: CourseResource[]
+  evaluacion_preguntas?: QuizQuestionItem[]
+  modelo_cobro?: 'Membresia' | 'Individual' | 'Ambos'
 }
 
 export default function CatalogView({
@@ -35,6 +54,7 @@ export default function CatalogView({
   membershipPlanName = '',
   purchasedCourseIds = [],
   userName = 'Bruno Cusi',
+  userRole = 'student',
   onOpenProfile,
 }: {
   courses: CourseItem[]
@@ -46,6 +66,7 @@ export default function CatalogView({
   membershipPlanName?: string
   purchasedCourseIds?: number[]
   userName?: string
+  userRole?: 'student' | 'teacher' | 'admin'
   onOpenProfile?: () => void
 }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -161,6 +182,7 @@ export default function CatalogView({
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           userName={userName}
+          userRole={userRole}
           onOpenProfile={onOpenProfile}
         />
 
@@ -410,6 +432,7 @@ export default function CatalogView({
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         userName={userName}
+        userRole={userRole}
         onOpenProfile={onOpenProfile}
       />
 

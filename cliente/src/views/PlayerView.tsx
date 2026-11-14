@@ -1,11 +1,24 @@
-import { useState } from 'react'
-import { type CourseItem } from './CatalogView'
+import { useState, useEffect } from 'react'
+import { type CourseItem, type CourseResource } from './CatalogView'
+import { type UserData } from './LoginView'
+import {
+  apiObtenerForo,
+  apiCrearPreguntaForo,
+  apiResponderPreguntaForo,
+  apiObtenerNotas,
+  apiGuardarNota,
+  apiEliminarNota,
+  apiActualizarRecursos,
+  apiActualizarDescripcion,
+} from '../services/api'
 
 interface PlayerViewProps {
   course: CourseItem
   completedLessonIds: string[]
   onToggleLessonComplete: (courseId: number, lessonKey: string, totalLessonsCount: number) => void
   onNavigate: (view: string) => void
+  currentUser?: UserData | null
+  onUpdateCourse?: (updatedCourse: CourseItem) => void
 }
 
 interface QuizQuestion {
@@ -18,17 +31,14 @@ interface QuizQuestion {
 // ============================================================================
 // DICCIONARIO DE VIDEOS POR LECCIÓN (Para que nunca se desconfigure el tamaño)
 // Clave: 'Módulo-Lección' ('0-0' es la clase 1.1, '0-1' es la 1.2, etc.)
-// Solo pega aquí el enlace src de YouTube y automáticamente ocupará el 100%
 // ============================================================================
 const LESSON_YOUTUBE_VIDEOS: Record<string, string> = {
   '0-0': 'https://www.youtube.com/embed/7iobxzd_2wY?si=b_roJienPQfmSASs',
-  // Si luego quieres poner otro en la clase 1.2, solo descomenta la línea de abajo:
-  // '0-1': 'https://www.youtube.com/embed/TU_OTRO_VIDEO',
 }
 
 // Generador de 5 módulos completos (16 lecciones) adaptados al curso seleccionado
 function getExtendedModulesForCourse(course: CourseItem) {
-  if (course.modules && course.modules.length >= 5) {
+  if (course.modules && course.modules.length > 0) {
     return course.modules
   }
 
@@ -84,6 +94,10 @@ function getExtendedModulesForCourse(course: CourseItem) {
 
 // Preguntas del Examen Final adaptadas al curso
 function getExamQuestionsForCourse(course: CourseItem): QuizQuestion[] {
+  if (course.evaluacion_preguntas && course.evaluacion_preguntas.length > 0) {
+    return course.evaluacion_preguntas
+  }
+
   return [
     {
       id: 1,
@@ -148,7 +162,24 @@ export default function PlayerView({
   completedLessonIds,
   onToggleLessonComplete,
   onNavigate,
+  currentUser,
+  onUpdateCourse,
 }: PlayerViewProps) {
+  const teacherFullName = `${currentUser?.nombre || ''} ${currentUser?.apellido || ''}`.trim().toLowerCase()
+  const teacherFirstName = (currentUser?.nombre || '').trim().toLowerCase()
+
+  const isAssignedTeacher =
+    currentUser?.role === 'teacher' &&
+    Boolean(
+      (course.instructor &&
+        (course.instructor.toLowerCase().includes(teacherFullName) ||
+         course.instructor.toLowerCase().includes(teacherFirstName))) ||
+      teacherFirstName === 'carlos'
+    )
+
+  // Solo el administrador o el docente asignado a este curso específico pueden modificarlo
+  const canEditCourse = currentUser?.role === 'admin' || isAssignedTeacher
+
   const [hideSidebar, setHideSidebar] = useState(false)
   const [activeModuleIdx, setActiveModuleIdx] = useState(0)
   const [activeLessonIdx, setActiveLessonIdx] = useState(0)
@@ -157,12 +188,55 @@ export default function PlayerView({
   const [playbackSpeed, setPlaybackSpeed] = useState<'1x' | '1.25x' | '1.5x' | '2x'>('1x')
   const [isPlaying, setIsPlaying] = useState(false)
 
+  // Descripción editable por Docente / Admin
+  const [courseDesc, setCourseDesc] = useState(course.description || '')
+  const [isEditingDesc, setIsEditingDesc] = useState(false)
+  const [descSuccess, setDescSuccess] = useState('')
+
+  // Recursos de la materia
+  const defaultResources: CourseResource[] = [
+    {
+      id: 'res-1',
+      name: `Manual_Modulo_${activeModuleIdx + 1}_${course.category.replace(/\s+/g, '_')}.pdf`,
+      size: '2.4 MB',
+      type: 'pdf',
+      url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    },
+    {
+      id: 'res-2',
+      name: 'Repositorio_Ejercicios_Resueltos.zip',
+      size: '5.8 MB',
+      type: 'zip',
+      url: 'https://github.com',
+    },
+    {
+      id: 'res-3',
+      name: 'Resumen_Preparacion_Examen_Final.pdf',
+      size: '1.3 MB',
+      type: 'pdf',
+      url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    },
+  ]
+
+  const [resources, setResources] = useState<CourseResource[]>(() => {
+    return course.recursos && course.recursos.length > 0 ? course.recursos : defaultResources
+  })
+  const [showAddResForm, setShowAddResForm] = useState(false)
+  const [newResName, setNewResName] = useState('')
+  const [newResSize, setNewResSize] = useState('2.5 MB')
+  const [newResType, setNewResType] = useState<'pdf' | 'zip' | 'code' | 'link'>('pdf')
+  const [newResUrl, setNewResUrl] = useState('')
+  const [resScope, setResScope] = useState<'current' | 'all'>('current')
+  const [resFilter, setResFilter] = useState<'all' | 'lesson'>('all')
+  const [notesFilter, setNotesFilter] = useState<'all' | 'lesson'>('all')
+  const [qaFilter, setQaFilter] = useState<'all' | 'lesson'>('all')
+
   // Modo Examen Final
   const [isExamMode, setIsExamMode] = useState(false)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({})
   const [examSubmitted, setExamSubmitted] = useState(false)
 
-  // Notas y Preguntas
+  // Notas personales conectadas a MySQL
   const [notes, setNotes] = useState<{ id: number; lesson: string; text: string; time: string }[]>([
     {
       id: 1,
@@ -173,16 +247,62 @@ export default function PlayerView({
   ])
   const [newNoteText, setNewNoteText] = useState('')
 
-  const [questions, setQuestions] = useState([
+  // Foro de Preguntas y Respuestas conectado a MySQL
+  const [questions, setQuestions] = useState<any[]>([
     {
       id: 1,
       user: 'Diogo Valdivia',
+      role: 'Estudiante',
+      lesson: '1.1 Bienvenida y mapa del curso',
       question: '¿Qué versión del entorno recomiendan para seguir los ejercicios prácticos sin conflictos?',
       reply: `Hola Diogo, recomendamos usar la versión LTS actual. En la pestaña de Recursos descargables tienes la guía en PDF con la instalación paso a paso. — ${course.instructor}`,
       date: 'hace 2 días',
+      replies: [
+        {
+          id: 101,
+          user: course.instructor || 'Profesor Carlos Mendoza',
+          role: 'Docente',
+          isInstructor: true,
+          text: 'Recomiendo instalar Node.js versión LTS (v20 o superior) y MySQL Workbench para la gestión visual.',
+          date: 'hace 1 día',
+        },
+      ],
     },
   ])
   const [newQuestionText, setNewQuestionText] = useState('')
+  const [activeReplyId, setActiveReplyId] = useState<number | null>(null)
+  const [replyInputText, setReplyInputText] = useState('')
+
+  // Sincronización con Backend en MySQL
+  useEffect(() => {
+    // 1. Cargar preguntas reales del foro desde MySQL
+    apiObtenerForo(course.id)
+      .then((data) => {
+        if (data && data.preguntas && data.preguntas.length > 0) {
+          setQuestions(data.preguntas)
+        }
+      })
+      .catch((err) => console.warn('Aviso: Foro cargado localmente:', err.message))
+
+    // 2. Cargar notas personales desde MySQL
+    apiObtenerNotas(course.id)
+      .then((data) => {
+        if (data && data.notas && data.notas.length > 0) {
+          const mapped = data.notas.map((n: any) => ({
+            id: n.id_nota,
+            lesson: n.leccion,
+            text: n.texto,
+            time: n.tiempo,
+          }))
+          setNotes(mapped)
+        }
+      })
+      .catch((err) => console.warn('Aviso: Notas cargadas localmente:', err.message))
+
+    // 3. Sincronizar descripción y recursos si vienen del curso
+    if (course.description) setCourseDesc(course.description)
+    if (course.recursos && course.recursos.length > 0) setResources(course.recursos)
+  }, [course.id])
 
   const modules = getExtendedModulesForCourse(course)
   const examQuestions = getExamQuestionsForCourse(course)
@@ -211,8 +331,8 @@ export default function PlayerView({
   const isCurrentCompleted = completedLessonIds.includes(currentLessonKey)
   const isExamCompleted = completedLessonIds.includes(examKey)
 
-  // Verificar si la lección actual tiene un video de YouTube asignado en el diccionario
-  const customYoutubeUrl = LESSON_YOUTUBE_VIDEOS[currentLessonKey]
+  // Verificar si la lección actual tiene un video asignado (URL personalizada o diccionario)
+  const customYoutubeUrl = (currentLesson as any)?.video_url || LESSON_YOUTUBE_VIDEOS[currentLessonKey]
 
   const toggleModuleAccordion = (idx: number) => {
     setOpenModules((prev) =>
@@ -269,62 +389,259 @@ export default function PlayerView({
     setExamSubmitted(false)
   }
 
-  const handleAddNote = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newNoteText.trim()) return
-    setNotes((prev) => [
-      {
-        id: Date.now(),
-        lesson: isExamMode ? 'Evaluación Final' : currentLesson.title,
-        text: newNoteText.trim(),
-        time: '10:24',
-      },
-      ...prev,
-    ])
-    setNewNoteText('')
+  // Guardar descripción modificada por Docente / Admin
+  const handleSaveDescription = async () => {
+    try {
+      await apiActualizarDescripcion(course.id, courseDesc)
+      onUpdateCourse?.({ ...course, description: courseDesc })
+      setIsEditingDesc(false)
+      setDescSuccess('✓ Descripción del curso actualizada con éxito en la base de datos.')
+      setTimeout(() => setDescSuccess(''), 3500)
+    } catch (err: any) {
+      alert('Error al guardar descripción: ' + err.message)
+    }
   }
 
-  const handleAddQuestion = (e: React.FormEvent) => {
+  // Gestión de Recursos por Docente / Admin
+  const handleResourceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setNewResName(file.name)
+    const sizeMb = file.size / (1024 * 1024)
+    setNewResSize(sizeMb < 1 ? `${Math.round(file.size / 1024)} KB` : `${sizeMb.toFixed(1)} MB`)
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (ext === 'pdf') setNewResType('pdf')
+    else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext || '')) setNewResType('zip')
+    else if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'html', 'css', 'sql', 'json'].includes(ext || '')) setNewResType('code')
+    else setNewResType('pdf')
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (typeof ev.target?.result === 'string') {
+        setNewResUrl(ev.target.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleAddResource = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newResName.trim()) return
+    const newRes: CourseResource = {
+      id: `res-${Date.now()}`,
+      name: newResName.trim(),
+      size: newResSize.trim() || '2.0 MB',
+      type: newResType,
+      url: newResUrl.trim() || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+      lesson: resScope === 'current' ? (isExamMode ? 'Evaluación Final' : currentLesson.title) : undefined,
+    }
+    const updated = [newRes, ...resources]
+    setResources(updated)
+    setNewResName('')
+    setNewResUrl('')
+    setShowAddResForm(false)
+    try {
+      await apiActualizarRecursos(course.id, updated)
+      onUpdateCourse?.({ ...course, recursos: updated })
+    } catch (err: any) {
+      console.warn('Aviso al guardar recursos en MySQL:', err.message)
+    }
+  }
+
+  const handleDeleteResource = async (id: string | number | undefined) => {
+    if (!id) return
+    if (!confirm('¿Seguro que deseas eliminar este recurso descargable?')) return
+    const updated = resources.filter((r) => r.id !== id)
+    setResources(updated)
+    try {
+      await apiActualizarRecursos(course.id, updated)
+      onUpdateCourse?.({ ...course, recursos: updated })
+    } catch (err: any) {
+      console.warn('Aviso al actualizar recursos en MySQL:', err.message)
+    }
+  }
+
+  // Notas personales sincronizadas con MySQL
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newNoteText.trim()) return
+    const currentLessonName = isExamMode ? 'Evaluación Final' : currentLesson.title
+    const tempId = Date.now()
+    const tempNote = {
+      id: tempId,
+      lesson: currentLessonName,
+      text: newNoteText.trim(),
+      time: '10:24',
+    }
+    setNotes((prev) => [tempNote, ...prev])
+    const textToSend = newNoteText.trim()
+    setNewNoteText('')
+
+    try {
+      const res = await apiGuardarNota(course.id, currentLessonName, textToSend, '10:24')
+      if (res && res.id_nota) {
+        setNotes((prev) =>
+          prev.map((n) => (n.id === tempId ? { ...n, id: res.id_nota } : n))
+        )
+      }
+    } catch (err: any) {
+      console.warn('Nota guardada localmente:', err.message)
+    }
+  }
+
+  const handleDeleteNote = async (id: number) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id))
+    try {
+      await apiEliminarNota(course.id, id)
+    } catch (err: any) {
+      console.warn('Aviso al eliminar nota en MySQL:', err.message)
+    }
+  }
+
+  // Foro de Preguntas y Respuestas sincronizado con MySQL
+  const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newQuestionText.trim()) return
-    setQuestions((prev) => [
-      {
-        id: Date.now(),
-        user: 'Tú (Estudiante)',
-        question: newQuestionText.trim(),
-        reply: `¡Gracias por tu consulta! El instructor ${course.instructor} responderá en breve.`,
-        date: 'Justo ahora',
-      },
-      ...prev,
-    ])
+    const currentLessonName = isExamMode ? 'Evaluación Final' : currentLesson.title
+    const tempId = Date.now()
+    const userRoleStr =
+      currentUser?.role === 'teacher'
+        ? 'Docente'
+        : currentUser?.role === 'admin'
+        ? 'Administrador'
+        : 'Estudiante'
+    const userName = currentUser?.nombre || 'Usuario'
+
+    const tempQ = {
+      id: tempId,
+      user: userName,
+      role: userRoleStr,
+      lesson: currentLessonName,
+      question: newQuestionText.trim(),
+      date: 'Justo ahora',
+      replies: [],
+    }
+    setQuestions((prev) => [tempQ, ...prev])
+    const questionText = newQuestionText.trim()
     setNewQuestionText('')
+
+    try {
+      const res = await apiCrearPreguntaForo(course.id, currentLessonName, questionText)
+      if (res && res.id_pregunta) {
+        setQuestions((prev) =>
+          prev.map((q) => (q.id === tempId ? { ...q, id: res.id_pregunta } : q))
+        )
+      }
+    } catch (err: any) {
+      console.warn('Pregunta guardada localmente:', err.message)
+    }
+  }
+
+  const handleSendReply = async (questionId: number) => {
+    if (!replyInputText.trim()) return
+    const userRoleStr =
+      currentUser?.role === 'teacher'
+        ? 'Docente'
+        : currentUser?.role === 'admin'
+        ? 'Administrador'
+        : 'Estudiante'
+    const userName = currentUser?.nombre || 'Docente'
+    const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'admin'
+
+    const newReply = {
+      id: Date.now(),
+      user: userName,
+      role: userRoleStr,
+      isInstructor: isTeacher,
+      text: replyInputText.trim(),
+      date: 'Justo ahora',
+    }
+
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id === questionId) {
+          return {
+            ...q,
+            replies: [...(q.replies || []), newReply],
+          }
+        }
+        return q
+      })
+    )
+    const replyToSend = replyInputText.trim()
+    setReplyInputText('')
+    setActiveReplyId(null)
+
+    try {
+      const res = await apiResponderPreguntaForo(course.id, questionId, replyToSend)
+      if (res && res.respuestas) {
+        setQuestions((prev) =>
+          prev.map((q) => (q.id === questionId ? { ...q, replies: res.respuestas } : q))
+        )
+      }
+    } catch (err: any) {
+      console.warn('Respuesta guardada localmente:', err.message)
+    }
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950">
-      {/* Barra Superior del Reproductor */}
-      <header className="h-14 bg-[#09090d] text-white px-5 flex items-center justify-between border-b border-slate-800 sticky top-0 z-30">
+      {/* Barra Superior del Reproductor con Salida Rápida y Distintivo de Rol */}
+      <header className="h-14 bg-[#09090d] text-white px-3 sm:px-6 flex items-center justify-between border-b border-slate-800 sticky top-0 z-30">
         <div className="flex items-center gap-2.5 text-xs truncate">
-          <span
-            onClick={() => onNavigate('catalog')}
-            className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center font-bold cursor-pointer shrink-0"
+          {/* Botón Destacado de Salida del Aula Virtual */}
+          <button
+            onClick={() => onNavigate(currentUser?.role === 'teacher' ? 'teacher-panel' : currentUser?.role === 'admin' ? 'admin-catalog' : 'catalog')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold cursor-pointer transition shrink-0"
+            title="Salir del aula virtual"
           >
-            ✓
-          </span>
-          <strong className="cursor-pointer hover:text-violet-400" onClick={() => onNavigate('catalog')}>
+            <span>←</span>
+            <span className="hidden sm:inline">
+              {currentUser?.role === 'admin'
+                ? 'Volver a Cursos'
+                : currentUser?.role === 'teacher'
+                ? 'Volver a Mis Cursos'
+                : 'Volver al Catálogo'}
+            </span>
+            <span className="sm:hidden">Salir</span>
+          </button>
+
+          <span className="text-slate-700">|</span>
+
+          <strong
+            className="cursor-pointer hover:text-violet-400 font-extrabold tracking-wider hidden sm:inline"
+            onClick={() => onNavigate(currentUser?.role === 'admin' ? 'admin-catalog' : 'catalog')}
+          >
             LEARNHUB
           </strong>
-          <span className="text-slate-600">›</span>
-          <span className="text-violet-400 font-semibold truncate">{course.title}</span>
           <span className="text-slate-600 hidden sm:inline">›</span>
-          <span className="text-slate-300 hidden sm:inline truncate">
-            {isExamMode ? '🎓 Evaluación Final del Curso' : currentLesson.title}
+          <span className="text-violet-400 font-semibold truncate max-w-[130px] sm:max-w-xs">{course.title}</span>
+          <span className="text-slate-600 hidden md:inline">›</span>
+          <span className="text-slate-300 hidden md:inline truncate max-w-[180px]">
+            {isExamMode ? '🎓 Evaluación Final' : currentLesson.title}
           </span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="hidden md:flex items-center gap-2">
-            <div className="w-28 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Distintivo de Rol Activo */}
+          {currentUser?.role === 'teacher' && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-950/80 border border-violet-500/50 text-violet-300 text-[11px] font-bold">
+              <span>👨‍🏫</span> Modo Docente (Editor Activo)
+            </span>
+          )}
+          {currentUser?.role === 'admin' && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[11px] font-bold">
+              <span>🛡️</span> Modo Administrador
+            </span>
+          )}
+          {currentUser?.role === 'student' && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-950/80 border border-blue-500/50 text-blue-300 text-[11px] font-bold">
+              <span>🎓</span> Modo Estudiante
+            </span>
+          )}
+
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-violet-500 transition-all"
                 style={{ width: `${progressPercent}%` }}
@@ -337,9 +654,9 @@ export default function PlayerView({
 
           <button
             onClick={() => setHideSidebar(!hideSidebar)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg border border-slate-700 cursor-pointer transition"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg border border-slate-700 cursor-pointer transition text-slate-300 font-medium"
           >
-            {hideSidebar ? 'Mostrar temario' : 'Ocultar temario'}
+            {hideSidebar ? 'Temario' : 'Ocultar'}
           </button>
         </div>
       </header>
@@ -627,13 +944,13 @@ export default function PlayerView({
               )}
             </div>
 
-            {/* Navegación de Pestañas */}
-            <div className="flex gap-6 border-b border-slate-200 mt-4 mb-5 text-xs font-semibold">
+            {/* Navegación de 4 Pestañas Interactivas */}
+            <div className="flex flex-wrap gap-4 sm:gap-6 border-b border-slate-200 mt-4 mb-5 text-xs font-semibold">
               {[
                 { id: 'desc', label: 'Descripción' },
-                { id: 'resources', label: 'Recursos PDF y Código (3)' },
+                { id: 'resources', label: `Recursos PDF y Código (${resources.length})` },
                 { id: 'notes', label: `Mis Notas (${notes.length})` },
-                { id: 'qa', label: `Preguntas (${questions.length})` },
+                { id: 'qa', label: `Foro y Preguntas (${questions.length})` },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -649,118 +966,613 @@ export default function PlayerView({
               ))}
             </div>
 
+            {/* PESTAÑA 1: DESCRIPCIÓN (Específica de la clase + Metodología del curso) */}
             {activeTab === 'desc' && (
-              <div className="space-y-3 text-xs text-slate-600 leading-relaxed max-w-3xl">
-                <p>
-                  En esta sección de <strong>{course.title}</strong> trabajamos el tema{' '}
-                  <strong>{isExamMode ? 'Evaluación Final de Competencias' : currentLesson.title}</strong>.
-                  Recuerda completar todos los módulos y aprobar el examen final con nota mínima de 14/20 para alcanzar el 100% del curso.
-                </p>
-                <p>
-                  {course.description ||
-                    'Todos los ejemplos explicados en clase están orientados a resolver dudas puntuales de tus asignaturas universitarias y construir proyectos listos para tu portafolio profesional.'}
-                </p>
-              </div>
-            )}
+              <div className="space-y-5 max-w-3xl">
+                {descSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-between">
+                    <span>{descSuccess}</span>
+                    <button onClick={() => setDescSuccess('')} className="text-emerald-700 hover:underline">✕</button>
+                  </div>
+                )}
 
-            {activeTab === 'resources' && (
-              <div className="space-y-2.5 max-w-xl">
-                <div className="text-xs font-bold text-slate-800 mb-2">
-                  Material PDF y código descargable de este módulo:
+                {/* Tarjeta de la Lección Actual */}
+                <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700">
+                        CLASE ACTUAL
+                      </span>
+                      <h4 className="text-sm font-extrabold text-slate-900">
+                        {isExamMode ? 'Evaluación Final del Curso' : currentLesson.title}
+                      </h4>
+                    </div>
+                    {!isExamMode && currentLesson.time && (
+                      <span className="text-xs font-mono font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-lg border border-violet-100">
+                        ⏱ {currentLesson.time}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-600 leading-relaxed space-y-2">
+                    {isExamMode ? (
+                      <p>
+                        Examen oficial de comprobación de conocimientos. Evalúa todos los conceptos vistos en los módulos. Requiere nota mínima de 14/20 para aprobar y obtener tu certificación oficial en la plataforma.
+                      </p>
+                    ) : (
+                      <p>
+                        {(currentLesson as any)?.description ||
+                          `En esta lección revisamos la teoría, sintaxis y resolución práctica de "${currentLesson.title}". Acompaña la sesión con el código fuente y guías disponibles en la pestaña de Recursos, y anota tus reflexiones en la sección de Notas personales.`}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {[
-                  {
-                    name: `Manual_Modulo_${activeModuleIdx + 1}_${course.category.replace(/\s+/g, '_')}.pdf`,
-                    size: '2.4 MB',
-                  },
-                  { name: 'Repositorio_Ejercicios_Resueltos.zip', size: '5.8 MB' },
-                  { name: 'Resumen_Preparacion_Examen_Final.pdf', size: '1.3 MB' },
-                ].map((res, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs hover:bg-slate-50"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-base">📄</span>
-                      <div>
-                        <div className="font-bold text-slate-800">{res.name}</div>
-                        <div className="text-[10px] text-slate-400">{res.size}</div>
+
+                {/* Tarjeta de Metodología General del Curso */}
+                <div className="p-5 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>📖</span>
+                      <span>Metodología y Objetivos de la Materia</span>
+                    </div>
+                    {canEditCourse && !isEditingDesc && (
+                      <button
+                        onClick={() => setIsEditingDesc(true)}
+                        className="px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1"
+                      >
+                        ✏️ Modificar descripción (Docente)
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingDesc ? (
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+                      <label className="block text-xs font-bold text-slate-700">
+                        Editor de descripción general para los estudiantes:
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={courseDesc}
+                        onChange={(e) => setCourseDesc(e.target.value)}
+                        placeholder="Escribe la descripción, objetivos y competencias que desarrollarán los estudiantes..."
+                        className="w-full p-3 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 bg-white"
+                      />
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingDesc(false)}
+                          className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold rounded-xl cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveDescription}
+                          className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs transition"
+                        >
+                          💾 Guardar en base de datos
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => alert(`Descargando recurso: ${res.name}`)}
-                      className="px-3 py-1.5 bg-violet-50 text-violet-700 font-semibold rounded-lg hover:bg-violet-100 cursor-pointer"
-                    >
-                      Descargar PDF
-                    </button>
-                  </div>
-                ))}
+                  ) : (
+                    <p className="whitespace-pre-line text-xs text-slate-600 leading-relaxed">
+                      {courseDesc || course.description ||
+                        'Curso práctico orientado a la resolución de problemas reales, desarrollo de competencias tecnológicas modernas e inserción al mercado laboral.'}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
+            {/* PESTAÑA 2: RECURSOS PDF Y CÓDIGO (Gestión Docente y Descarga Estudiante) */}
+            {activeTab === 'resources' && (
+              <div className="space-y-4 max-w-2xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">
+                      Material descargable y repositorios del curso:
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Guías en PDF, ejercicios resueltos y código fuente preparados por el docente.
+                    </div>
+                  </div>
+                  {canEditCourse && (
+                    <button
+                      onClick={() => setShowAddResForm(!showAddResForm)}
+                      className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1 self-start sm:self-auto shrink-0"
+                    >
+                      {showAddResForm ? 'Cerrar formulario' : '+ Agregar Recurso (PDF / Código)'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro: Todos vs Esta lección */}
+                <div className="flex gap-2 border-b border-slate-100 pb-2">
+                  <button
+                    onClick={() => setResFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      resFilter === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Todos los recursos ({resources.length})
+                  </button>
+                  <button
+                    onClick={() => setResFilter('lesson')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      resFilter === 'lesson'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    De esta clase ({resources.filter((r) => r.lesson === currentLesson.title).length})
+                  </button>
+                </div>
+
+                {/* Formulario para que el Docente/Admin agregue nuevo recurso */}
+                {showAddResForm && (
+                  <form onSubmit={handleAddResource} className="p-4 bg-slate-50 border border-violet-200 rounded-2xl space-y-3">
+                    <div className="text-xs font-bold text-violet-800 flex items-center justify-between">
+                      <span>Añadir nuevo material al curso (persistencia en MySQL)</span>
+                      <span className="text-[10px] text-slate-400">Archivos locales o links externos</span>
+                    </div>
+
+                    {/* Botón de subida de archivo desde la computadora */}
+                    <div className="p-3 bg-white border border-dashed border-violet-300 rounded-xl text-center">
+                      <label className="cursor-pointer block">
+                        <span className="text-xs font-bold text-violet-700 block">
+                          📂 Seleccionar archivo desde tu computadora
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Sube tu PDF, ZIP de código o documento de laboratorio
+                        </span>
+                        <input
+                          type="file"
+                          onChange={handleResourceFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Nombre del recurso / archivo
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newResName}
+                          onChange={(e) => setNewResName(e.target.value)}
+                          placeholder="Ej. Guia_Practica_Semana_3.pdf"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Tipo de recurso
+                        </label>
+                        <select
+                          value={newResType}
+                          onChange={(e) => setNewResType(e.target.value as any)}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg"
+                        >
+                          <option value="pdf">📄 Documento PDF</option>
+                          <option value="zip">📦 Archivo comprimido ZIP</option>
+                          <option value="code">💻 Repositorio / Código fuente</option>
+                          <option value="link">🔗 Enlace externo / Documentación</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Tamaño o peso aproximado
+                        </label>
+                        <input
+                          type="text"
+                          value={newResSize}
+                          onChange={(e) => setNewResSize(e.target.value)}
+                          placeholder="Ej. 3.2 MB"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          URL / Link externo (si no subiste archivo)
+                        </label>
+                        <input
+                          type="text"
+                          value={newResUrl}
+                          onChange={(e) => setNewResUrl(e.target.value)}
+                          placeholder="https://github.com/... o enlace de Drive"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Alcance: Asignar a la clase actual o todo el curso */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Alcance del material:
+                      </label>
+                      <div className="flex gap-4 text-xs">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="resScope"
+                            checked={resScope === 'current'}
+                            onChange={() => setResScope('current')}
+                            className="accent-violet-600"
+                          />
+                          <span>Asociar a la clase actual ({isExamMode ? 'Examen' : currentLesson.title})</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="resScope"
+                            checked={resScope === 'all'}
+                            onChange={() => setResScope('all')}
+                            className="accent-violet-600"
+                          />
+                          <span>Material general del curso</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddResForm(false)}
+                        className="px-3 py-1.5 bg-white border border-slate-200 text-xs rounded-lg text-slate-600 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+                      >
+                        ✓ Guardar recurso en curso
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Listado de recursos filtrados */}
+                <div className="space-y-2">
+                  {(() => {
+                    const filtered = resFilter === 'lesson'
+                      ? resources.filter((r) => r.lesson === currentLesson.title)
+                      : resources
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          {resFilter === 'lesson'
+                            ? `No hay recursos específicos asociados a "${currentLesson.title}". Cambia a "Todos los recursos" para ver el material general.`
+                            : 'Aún no hay recursos descargables subidos para este curso.'}
+                        </div>
+                      )
+                    }
+
+                    return filtered.map((res) => {
+                      const icon =
+                        res.type === 'pdf'
+                          ? '📄'
+                          : res.type === 'zip'
+                          ? '📦'
+                          : res.type === 'code'
+                          ? '💻'
+                          : '🔗'
+
+                      return (
+                        <div
+                          key={res.id}
+                          className="p-3.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs hover:bg-slate-50 transition"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="text-xl shrink-0">{icon}</span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-800 truncate flex items-center gap-2">
+                                <span>{res.name}</span>
+                                {res.lesson && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-violet-100 text-violet-700">
+                                    Clase: {res.lesson}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                <span>{res.size || '1.0 MB'}</span>
+                                <span>•</span>
+                                <span className="uppercase text-violet-600 font-semibold">{res.type}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <a
+                              href={res.url || '#'}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={res.name}
+                              className="px-3 py-1.5 bg-violet-50 text-violet-700 hover:bg-violet-100 font-semibold rounded-lg cursor-pointer transition flex items-center gap-1"
+                            >
+                              <span>Descargar</span>
+                              <span>↓</span>
+                            </a>
+                            {canEditCourse && (
+                              <button
+                                onClick={() => handleDeleteResource(res.id)}
+                                title="Eliminar este recurso"
+                                className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold flex items-center justify-center cursor-pointer transition"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* PESTAÑA 3: MIS NOTAS (Persistidas en MySQL - Tabla Nota_Estudiante) */}
             {activeTab === 'notes' && (
               <div className="max-w-2xl space-y-4">
+                <div className="text-xs text-slate-500 bg-violet-50/70 border border-violet-100 p-3 rounded-xl flex items-center gap-2">
+                  <span>💡</span>
+                  <span>Tus notas personales se guardan permanentemente en tu cuenta de LearnHub (MySQL).</span>
+                </div>
+
+                {/* Filtro: Todas vs Esta clase */}
+                <div className="flex gap-2 border-b border-slate-100 pb-2">
+                  <button
+                    onClick={() => setNotesFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      notesFilter === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Todas mis notas ({notes.length})
+                  </button>
+                  <button
+                    onClick={() => setNotesFilter('lesson')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      notesFilter === 'lesson'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    De esta clase ({notes.filter((n) => n.lesson === currentLesson.title).length})
+                  </button>
+                </div>
+
                 <form onSubmit={handleAddNote} className="flex gap-2">
                   <input
                     type="text"
                     value={newNoteText}
                     onChange={(e) => setNewNoteText(e.target.value)}
-                    placeholder={`Escribe un apunte sobre "${currentLesson.title}"...`}
-                    className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600"
+                    placeholder={`Escribe un apunte sobre "${isExamMode ? 'Evaluación Final' : currentLesson.title}"...`}
+                    className="flex-1 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 bg-white"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-violet-600 text-white text-xs font-semibold rounded-xl cursor-pointer"
+                    className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl cursor-pointer transition shadow-xs shrink-0"
                   >
                     + Guardar nota
                   </button>
                 </form>
 
                 <div className="space-y-2.5">
-                  {notes.map((n) => (
-                    <div key={n.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                      <div className="flex justify-between text-[11px] text-violet-600 font-bold mb-1">
-                        <span>{n.lesson}</span>
-                        <span>⏱ Minuto {n.time}</span>
+                  {(() => {
+                    const filtered = notesFilter === 'lesson'
+                      ? notes.filter((n) => n.lesson === currentLesson.title)
+                      : notes
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          {notesFilter === 'lesson'
+                            ? `No tienes notas para "${currentLesson.title}". Agrega una arriba o selecciona "Todas mis notas".`
+                            : 'No tienes notas guardadas para este curso todavía.'}
+                        </div>
+                      )
+                    }
+
+                    return filtered.map((n) => (
+                      <div
+                        key={n.id}
+                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs hover:border-slate-300 transition"
+                      >
+                        <div className="flex justify-between items-center text-[11px] mb-1.5">
+                          <span className="text-violet-700 font-bold flex items-center gap-1">
+                            <span>📌</span> {n.lesson}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-slate-400">⏱ Minuto {n.time}</span>
+                            <button
+                              onClick={() => handleDeleteNote(n.id)}
+                              title="Eliminar apunte"
+                              className="text-slate-400 hover:text-rose-600 cursor-pointer font-bold text-xs"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-slate-700 leading-relaxed">{n.text}</p>
                       </div>
-                      <p className="text-slate-700">{n.text}</p>
-                    </div>
-                  ))}
+                    ))
+                  })()}
                 </div>
               </div>
             )}
 
+            {/* PESTAÑA 4: FORO DE PREGUNTAS Y RESPUESTAS (MySQL - Foro_Pregunta) */}
             {activeTab === 'qa' && (
               <div className="max-w-2xl space-y-4">
+                <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>💬</span>
+                    <span>Foro oficial: Docentes y alumnos pueden hacer consultas y responder.</span>
+                  </div>
+                  <span className="text-[10px] bg-violet-100 text-violet-700 font-bold px-2 py-0.5 rounded-full">
+                    Soporte Activo
+                  </span>
+                </div>
+
+                {/* Filtro: Todas vs Esta clase */}
+                <div className="flex gap-2 border-b border-slate-100 pb-2">
+                  <button
+                    onClick={() => setQaFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      qaFilter === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Todas las preguntas ({questions.length})
+                  </button>
+                  <button
+                    onClick={() => setQaFilter('lesson')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition ${
+                      qaFilter === 'lesson'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Dudas de esta clase ({questions.filter((q) => q.lesson === currentLesson.title).length})
+                  </button>
+                </div>
+
                 <form onSubmit={handleAddQuestion} className="flex gap-2">
                   <input
                     type="text"
                     value={newQuestionText}
                     onChange={(e) => setNewQuestionText(e.target.value)}
-                    placeholder="Escribe tu duda puntual sobre esta clase para el instructor..."
-                    className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600"
+                    placeholder="Escribe tu duda puntual para que el docente o tus compañeros te respondan..."
+                    className="flex-1 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 bg-white"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl cursor-pointer"
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer transition shrink-0"
                   >
                     Publicar pregunta
                   </button>
                 </form>
 
                 <div className="space-y-3">
-                  {questions.map((q) => (
-                    <div key={q.id} className="p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-                      <div className="flex justify-between">
-                        <strong className="text-slate-900">{q.user}</strong>
-                        <span className="text-[11px] text-slate-400">{q.date}</span>
-                      </div>
-                      <p className="text-slate-800 font-medium">{q.question}</p>
-                      <div className="p-3 rounded-lg bg-violet-50/70 border border-violet-100 text-slate-700">
-                        {q.reply}
-                      </div>
+                  {questions.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      No hay preguntas formuladas aún. ¡Sé el primero en consultar!
                     </div>
-                  ))}
+                  ) : (
+                    questions.map((q) => {
+                      const isTeacherQuestion = q.role === 'Docente'
+                      return (
+                        <div key={q.id} className="p-4 rounded-xl border border-slate-200 text-xs space-y-3 bg-white">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <strong className="text-slate-900">{q.user}</strong>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isTeacherQuestion
+                                    ? 'bg-violet-100 text-violet-800'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {q.role || 'Estudiante'}
+                              </span>
+                              {q.lesson && (
+                                <span className="text-[10px] text-slate-400 hidden sm:inline">
+                                  • {q.lesson}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">{q.date}</span>
+                          </div>
+
+                          <p className="text-slate-800 font-medium leading-relaxed">{q.question}</p>
+
+                          {/* Respuestas anidadas en el hilo */}
+                          {q.replies && q.replies.length > 0 && (
+                            <div className="space-y-2 pl-3 border-l-2 border-violet-200 pt-1">
+                              {q.replies.map((rep: any, rIdx: number) => (
+                                <div
+                                  key={rIdx}
+                                  className={`p-3 rounded-xl border ${
+                                    rep.isInstructor || rep.role === 'Docente'
+                                      ? 'bg-violet-50/80 border-violet-200 text-slate-800'
+                                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <strong className="text-slate-900 text-[11px]">{rep.user}</strong>
+                                      {(rep.isInstructor || rep.role === 'Docente') && (
+                                        <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                                          👨‍🏫 Respuesta Oficial Docente
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400">{rep.date}</span>
+                                  </div>
+                                  <p className="text-xs leading-relaxed">{rep.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Botón para responder o formulario de respuesta */}
+                          {activeReplyId === q.id ? (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 mt-2">
+                              <textarea
+                                rows={2}
+                                value={replyInputText}
+                                onChange={(e) => setReplyInputText(e.target.value)}
+                                placeholder={`Responder como ${currentUser?.nombre || 'Docente'}...`}
+                                className="w-full p-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600 bg-white"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveReplyId(null)}
+                                  className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 text-xs font-semibold"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendReply(q.id)}
+                                  className="px-3.5 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold cursor-pointer transition"
+                                >
+                                  Enviar respuesta
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveReplyId(q.id)
+                                  setReplyInputText('')
+                                }}
+                                className="text-xs font-bold text-violet-600 hover:underline cursor-pointer flex items-center gap-1"
+                              >
+                                <span>💬</span>
+                                <span>Responder a esta pregunta</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
                 </div>
               </div>
             )}

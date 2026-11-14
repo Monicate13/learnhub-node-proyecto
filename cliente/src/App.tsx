@@ -1,9 +1,19 @@
 import { useState, useEffect } from 'react'
-import { apiObtenerCursos, apiComprarCurso, apiSuscribirPlan, getAuthToken } from './services/api'
+import { 
+  apiObtenerCursos, 
+  apiComprarCurso, 
+  apiSuscribirPlan, 
+  apiCrearCurso,
+  apiActualizarCurso,
+  apiEliminarCurso,
+  apiObtenerTransaccionesAdmin,
+  getAuthToken 
+} from './services/api'
 import LoginView, { type UserData } from './views/LoginView'
 import CatalogView, { type CourseItem } from './views/CatalogView'
 import DashboardView, { type SavedCard } from './views/DashboardView'
 import PlayerView from './views/PlayerView'
+import TeacherDashboard from './views/TeacherDashboard'
 import AdminOverview from './views/admin/AdminOverview'
 import CatalogManagement from './views/admin/CatalogManagement'
 import CourseEditor from './views/admin/CourseEditor'
@@ -12,17 +22,9 @@ import CookieBanner from './components/CookieBanner'
 import WhatsAppButton from './components/WhatsAppButton'
 import LegalModal from './components/LegalModal'
 import NotFoundView from './components/NotFoundView'
-
-export interface MembershipPlan {
-  id: string
-  name: string
-  months: number
-  totalPrice: number
-  monthlyEquivalent: number
-  badge?: string
-  expiresLabel: string
-  features: string[]
-}
+import ProfileModal from './components/ProfileModal'
+import PlansModal, { type MembershipPlan } from './components/PlansModal'
+import CheckoutModal, { type SandboxCheckout } from './components/CheckoutModal'
 
 const MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
@@ -96,142 +98,593 @@ const DEFAULT_USERS: UserData[] = [
 
 const INITIAL_COURSES: CourseItem[] = [
   {
-    id: 1,
-    title: 'JavaScript Full Stack con Node.js',
-    category: 'Backend',
-    level: 'Intermedio',
-    instructor: 'Valentina Torres',
+    id: 3,
+    title: 'Lógica de Programación y Fundamentos de JavaScript Moderno (2026)',
+    category: 'Frontend',
+    level: 'Principiante',
+    instructor: 'Carlos Mendoza',
     rating: 4.9,
-    reviews: 3241,
-    students: 3241,
-    duration: '61h 45m',
-    lessons: 96,
-    price: 119,
+    reviews: 1840,
+    students: 1840,
+    duration: '28h 30m',
+    lessons: 9,
+    price: 39,
+    modelo_cobro: 'Ambos',
     status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=600&q=80',
-    description: 'Domina el desarrollo Full Stack moderno construyendo APIs REST seguras con Node.js, Express y bases de datos relacionales.',
+    image: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&w=800&q=80',
+    description: 'Aprende a programar desde cero sin conocimientos previos. Domina variables, estructuras de control, funciones, arreglos, manipulación del DOM y sintaxis moderna ES2026 con ejercicios prácticos y proyectos del mundo real.',
+    modules: [
+      {
+        title: 'Módulo 1: Pensamiento Lógico y Primeros Pasos con JavaScript',
+        duration: '6h 15m',
+        lessons: [
+          {
+            title: '1.1 ¿Cómo piensa una computadora? Algoritmos y pseudocódigo',
+            time: '18:40',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Entender el flujo secuencial de instrucciones, toma de decisiones y cómo descomponer un problema complejo en pasos simples.'
+          },
+          {
+            title: '1.2 Configuración del entorno: Node.js, VS Code y extensiones 2026',
+            time: '24:10',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Instalación paso a paso de Visual Studio Code, configuración de ESLint, Prettier y ejecución de scripts mediante terminal integrada.'
+          },
+          {
+            title: '1.3 Variables, tipos de datos primitivos y operadores',
+            time: '22:50',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Uso correcto de const y let, tipos de datos String, Number, Boolean, BigInt, Symbol y operadores aritméticos y lógicos.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Estructuras de Control y Modularización',
+        duration: '8h 45m',
+        lessons: [
+          {
+            title: '2.1 Condicionales if/else, switch y operador ternario',
+            time: '20:30',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Toma de decisiones en el código, tablas de verdad y simplificación de condiciones con cortocircuito lógico.'
+          },
+          {
+            title: '2.2 Bucles modernos: for, for...of, while y métodos funcionales',
+            time: '26:15',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Iteración sobre colecciones de datos, cómo evitar bucles infinitos y uso de break y continue.'
+          },
+          {
+            title: '2.3 Funciones flecha, parámetros por defecto y ámbito léxico',
+            time: '25:40',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Creación de funciones puras, reutilización de lógica y comprensión del Scope global versus local.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 3: Estructuras de Datos y Proyecto Práctico',
+        duration: '13h 35m',
+        lessons: [
+          {
+            title: '3.1 Arreglos y métodos esenciales: map, filter, reduce',
+            time: '28:10',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Transformación y filtrado de datos sin mutar el arreglo original siguiendo principios de programación funcional.'
+          },
+          {
+            title: '3.2 Objetos literales, desestructuración y operador Spread',
+            time: '22:15',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Modelado de entidades del mundo real en objetos clave-valor, clonación segura y extracción limpia de propiedades.'
+          },
+          {
+            title: '3.3 Proyecto: Calculadora de Presupuesto Personal Interactiva',
+            time: '32:00',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Construcción completa de una aplicación de consola y navegador que gestiona ingresos, gastos y ahorros.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-js-1',
+        name: 'CheatSheet_JavaScript_Moderno_2026.pdf',
+        size: '2.4 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '1.3 Variables, tipos de datos primitivos y operadores'
+      },
+      {
+        id: 'res-js-2',
+        name: 'Guia_Ejercicios_Algoritmos_Resueltos.pdf',
+        size: '3.8 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '2.1 Condicionales if/else, switch y operador ternario'
+      },
+      {
+        id: 'res-js-3',
+        name: 'Codigo_Proyecto_Calculadora_Presupuesto.zip',
+        size: '1.2 MB',
+        type: 'zip',
+        url: 'https://github.com',
+        lesson: '3.3 Proyecto: Calculadora de Presupuesto Personal Interactiva'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Cuál es la diferencia fundamental entre declarar una variable con const y let en JavaScript?',
+        options: [
+          'const crea una referencia inmutable que no puede ser reasignada, mientras que let sí permite reasignación',
+          'const solo existe en funciones y let solo en bucles',
+          'let convierte todos los valores en cadenas de texto',
+          'No existe ninguna diferencia; son exactamente equivalentes'
+        ],
+        correctIndex: 0
+      },
+      {
+        id: 2,
+        question: '¿Qué retorna el método Array.prototype.filter() cuando ninguna condición coincide?',
+        options: [
+          'Un arreglo vacío []',
+          'null',
+          'undefined',
+          'Lanza un error de tipo TypeError'
+        ],
+        correctIndex: 0
+      }
+    ]
+  },
+  {
+    id: 1,
+    title: 'Python desde Cero e Introducción a la Inteligencia Artificial (2026)',
+    category: 'Data Science',
+    level: 'Principiante',
+    instructor: 'Roberto Cruz',
+    rating: 4.9,
+    reviews: 2150,
+    students: 2150,
+    duration: '32h 0m',
+    lessons: 8,
+    price: 49,
+    modelo_cobro: 'Ambos',
+    status: 'PUBLICADO',
+    image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80',
+    description: 'Iníciate en Python con las mejores prácticas del 2026. Aprende la sintaxis limpia del lenguaje más popular, automatiza tareas cotidianas, manipula datos con Pandas y realiza tus primeras integraciones con modelos de Inteligencia Artificial Generativa.',
+    modules: [
+      {
+        title: 'Módulo 1: Fundamentos y Sintaxis Clara de Python',
+        duration: '7h 30m',
+        lessons: [
+          {
+            title: '1.1 Bienvenida al curso e instalación de Python 3.12+ y Jupyter',
+            time: '16:20',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Instalación del intérprete oficial de Python, configuración de entornos virtuales (venv) y primeros comandos interactivos.'
+          },
+          {
+            title: '1.2 Variables dinámicas, f-strings y entrada por teclado',
+            time: '21:10',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Manejo de cadenas formateadas, conversión de tipos con int() y float(), y captura de datos con input().'
+          },
+          {
+            title: '1.3 Estructuras clave: Listas, Tuplas, Diccionarios y Sets',
+            time: '29:45',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Diferencias de mutabilidad, indexación, métodos útiles (append, pop, keys, items) y comprensión de listas.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Modularidad, Archivos y Automatización',
+        duration: '10h 15m',
+        lessons: [
+          {
+            title: '2.1 Creación de funciones reutilizables con Type Hints',
+            time: '22:15',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Anotaciones de tipo para código robusto, valores por defecto y retorno múltiple en tuplas.'
+          },
+          {
+            title: '2.2 Lectura y escritura de archivos CSV y JSON',
+            time: '25:30',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Uso del context manager with open(), procesamiento estructurado de datasets y serialización JSON.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 3: Primeros pasos con IA y APIs Modernas',
+        duration: '14h 15m',
+        lessons: [
+          {
+            title: '3.1 Introducción a Pandas: DataFrames y análisis exploratorio',
+            time: '31:20',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Carga de datos masivos, filtrado por columnas, estadísticas descriptivas y detección de valores nulos.'
+          },
+          {
+            title: '3.2 Conectando Python con APIs de Inteligencia Artificial (Gemini API)',
+            time: '33:40',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Uso de requests y librerías oficiales para enviar prompts, recibir respuestas estructuradas y generar análisis inteligentes.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-py-1',
+        name: 'Manual_Python_Sintaxis_Limpia_2026.pdf',
+        size: '3.1 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '1.2 Variables dinámicas, f-strings y entrada por teclado'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Cuál es la principal ventaja de utilizar with open(...) en Python?',
+        options: [
+          'Garantiza que el archivo se cierre automáticamente incluso si ocurre una excepción',
+          'Hace que el archivo sea indestructible en el disco',
+          'Traduce el archivo automáticamente a lenguaje C',
+          'Comprime el archivo en formato ZIP en segundo plano'
+        ],
+        correctIndex: 0
+      }
+    ]
   },
   {
     id: 2,
-    title: 'React + TypeScript: Aplicaciones Modernas',
-    category: 'Frontend',
-    level: 'Avanzado',
-    instructor: 'Carlos Ruiz',
-    rating: 4.8,
-    reviews: 2103,
-    students: 2103,
-    duration: '38h 15m',
-    lessons: 52,
-    price: 89,
-    status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80',
-    description: 'Construye interfaces web escalables con React 19, tipado estricto en TypeScript, hooks personalizados y arquitectura limpia.',
-  },
-  {
-    id: 3,
-    title: 'Python para Ciencia de Datos',
-    category: 'Data Science',
-    level: 'Intermedio',
-    instructor: 'Ana Martínez',
-    rating: 4.9,
-    reviews: 1842,
-    students: 1842,
-    duration: '42h 30m',
-    lessons: 68,
-    price: 79,
-    status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80',
-    description: 'Aprende Python aplicado a ciencia de datos con NumPy, Pandas, Matplotlib y Scikit-learn con datasets reales de la industria.',
-  },
-  {
-    id: 4,
-    title: 'Machine Learning con TensorFlow',
-    category: 'IA & ML',
-    level: 'Avanzado',
-    instructor: 'Rafael Mendoza',
-    rating: 4.8,
-    reviews: 1456,
-    students: 1456,
-    duration: '48h 20m',
-    lessons: 72,
-    price: 99,
-    status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80',
-    description: 'Entrena redes neuronales profundas, modelos de clasificación y visión computacional utilizando TensorFlow y Keras.',
-  },
-  {
-    id: 5,
-    title: 'CSS Avanzado: Animaciones y Layout',
+    title: 'Desarrollo Frontend Moderno con React 19 y Tailwind CSS (2026)',
     category: 'Frontend',
     level: 'Principiante',
-    instructor: 'Camila Restrepo',
+    instructor: 'Carlos Mendoza',
     rating: 4.8,
-    reviews: 1205,
-    students: 1205,
-    duration: '24h 10m',
-    lessons: 38,
-    price: 49,
+    reviews: 1420,
+    students: 1420,
+    duration: '35h 0m',
+    lessons: 6,
+    price: 59,
+    modelo_cobro: 'Ambos',
     status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80',
-    description: 'Domina CSS Grid, Flexbox, diseño responsivo moderno, variables CSS y micro-interacciones fluidas sin librerías externas.',
-  },
-  {
-    id: 6,
-    title: 'DevOps con Docker y Kubernetes',
-    category: 'DevOps',
-    level: 'Avanzado',
-    instructor: 'Diego Fernández',
-    rating: 4.7,
-    reviews: 987,
-    students: 987,
-    duration: '55h 0m',
-    lessons: 84,
-    price: 95,
-    status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=600&q=80',
-    description: 'Automatiza despliegues con contenedores Docker, orquestación en Kubernetes y pipelines de integración continua CI/CD.',
-  },
-  {
-    id: 7,
-    title: 'Diseño de APIs REST con Spring Boot',
-    category: 'Backend',
-    level: 'Intermedio',
-    instructor: 'Roberto Cruz',
-    rating: 4.6,
-    reviews: 724,
-    students: 724,
-    duration: '30h 0m',
-    lessons: 45,
-    price: 69,
-    status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&w=600&q=80',
-    description: 'Desarrolla microservicios empresariales en Java con Spring Boot, Spring Security, JPA e integración con bases de datos.',
+    image: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=800&q=80',
+    description: 'Aprende el estándar del desarrollo web moderno. Domina React 19, componentes funcionales, useState, useEffect, diseño de interfaces responsivas con Tailwind CSS y consumo de APIs REST.',
+    modules: [
+      {
+        title: 'Módulo 1: Fundamentos de Componentes e Interfaces Modernas',
+        duration: '9h 30m',
+        lessons: [
+          {
+            title: '1.1 Introducción a React 19 y configuración con Vite',
+            time: '19:50',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Arquitectura basada en componentes, JSX y arranque de proyectos ultrarrápidos con Vite.'
+          },
+          {
+            title: '1.2 Maquetación atómica con Tailwind CSS',
+            time: '24:30',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Clases utilitarias, Flexbox, Grid, estados hover, focus y diseño adaptado a móviles y tablets.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Estado, Efectos y Formularios Reactivos',
+        duration: '11h 0m',
+        lessons: [
+          {
+            title: '2.1 Manejo de estado con el hook useState',
+            time: '26:40',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Renderizado reactivo, inmutabilidad y actualización de listas y objetos en el estado.'
+          },
+          {
+            title: '2.2 Ciclo de vida y efectos secundarios con useEffect',
+            time: '29:15',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Peticiones asíncronas con fetch, sincronización con APIs externas y funciones de limpieza.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-react-1',
+        name: 'Guia_React_19_Hooks_y_Componentes.pdf',
+        size: '2.8 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '1.1 Introducción a React 19 y configuración con Vite'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Por qué en React 19 no debemos mutar directamente el estado?',
+        options: [
+          'Porque React detecta cambios comparando referencias inmutables para re-renderizar la vista',
+          'Porque el navegador bloquea la memoria si un arreglo cambia',
+          'Porque el estado solo acepta valores booleanos',
+          'Porque reinicia el servidor'
+        ],
+        correctIndex: 0
+      }
+    ]
   },
   {
     id: 8,
-    title: 'Desarrollo iOS con Swift y SwiftUI',
-    category: 'Mobile',
+    title: 'Bases de Datos Relacionales con MySQL y Node.js (2026)',
+    category: 'Backend',
     level: 'Principiante',
-    instructor: 'Elena Vargas',
-    rating: 4.7,
-    reviews: 891,
-    students: 891,
-    duration: '34h 20m',
-    lessons: 50,
-    price: 75,
+    instructor: 'Héctor Leandro Soto Crespo',
+    rating: 4.8,
+    reviews: 980,
+    students: 980,
+    duration: '26h 40m',
+    lessons: 5,
+    price: 45,
+    modelo_cobro: 'Individual',
     status: 'PUBLICADO',
-    image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=600&q=80',
-    description: 'Crea aplicaciones móviles nativas desde cero utilizando el lenguaje Swift e interfaces declarativas con SwiftUI.',
+    image: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=800&q=80',
+    description: 'Domina el almacenamiento de información empresarial. Aprende a diseñar esquemas normalizados, tablas, llaves primarias/foráneas, consultas SQL optimizadas (SELECT, JOIN, GROUP BY) y a conectarte desde una API REST en Node.js.',
+    modules: [
+      {
+        title: 'Módulo 1: Diseño Relacional y Modelado de Datos',
+        duration: '8h 20m',
+        lessons: [
+          {
+            title: '1.1 Conceptos relacionales: Tablas, Filas, Columnas y Claves',
+            time: '20:10',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Qué es una base de datos relacional, integridad referencial y modelado Entidad-Relación.'
+          },
+          {
+            title: '1.2 Tipos de datos SQL y restricciones (PRIMARY KEY, FOREIGN KEY)',
+            time: '22:45',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Selección precisa de tipos VARCHAR, INT, DECIMAL y diseño sin redundancia.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Consultas SQL Profesionales',
+        duration: '10h 10m',
+        lessons: [
+          {
+            title: '2.1 Consultas SELECT, filtros WHERE y paginación',
+            time: '25:30',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Recuperación de datos eficiente, operadores lógicos y paginación con LIMIT.'
+          },
+          {
+            title: '2.2 Uniones relacionales con INNER JOIN y LEFT JOIN',
+            time: '28:50',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Combinación de información entre tablas múltiples respetando la integridad referencial.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-sql-1',
+        name: 'Guia_SQL_Consultas_y_Joins_2026.pdf',
+        size: '2.1 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '2.2 Uniones relacionales con INNER JOIN y LEFT JOIN'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Cuál es la principal diferencia entre un INNER JOIN y un LEFT JOIN?',
+        options: [
+          'INNER JOIN solo devuelve filas con coincidencia en ambas tablas, mientras que LEFT JOIN incluye todas las filas de la tabla izquierda',
+          'LEFT JOIN elimina datos de la tabla derecha',
+          'INNER JOIN solo funciona con números enteros',
+          'Son idénticos'
+        ],
+        correctIndex: 0
+      }
+    ]
   },
+  {
+    id: 9,
+    title: 'Git, GitHub y Flujos de Trabajo para Desarrolladores Junior (2026)',
+    category: 'DevOps',
+    level: 'Principiante',
+    instructor: 'Carlos Mendoza',
+    rating: 4.9,
+    reviews: 1650,
+    students: 1650,
+    duration: '22h 15m',
+    lessons: 5,
+    price: 29,
+    modelo_cobro: 'Membresia',
+    status: 'PUBLICADO',
+    image: 'https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?auto=format&fit=crop&w=800&q=80',
+    description: 'El curso indispensable para todo programador. Domina el control de versiones, creación de ramas (branches), resolución de conflictos, Pull Requests en GitHub, Conventional Commits y publicación de proyectos en la nube.',
+    modules: [
+      {
+        title: 'Módulo 1: Control de Versiones Local con Git',
+        duration: '7h 0m',
+        lessons: [
+          {
+            title: '1.1 ¿Qué es Git? Instalación y configuración global',
+            time: '15:30',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Configuración de usuario, email, clave SSH y comprensión del working directory y commit.'
+          },
+          {
+            title: '1.2 El ciclo de vida de un cambio: git add, commit y log',
+            time: '21:00',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Creación de commits atómicos con mensajes descriptivos siguiendo Conventional Commits.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Ramas, Fusiones y Colaboración en GitHub',
+        duration: '9h 30m',
+        lessons: [
+          {
+            title: '2.1 Creación de ramas y estrategias de flujo',
+            time: '24:10',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Aislamiento de nuevas funcionalidades y git checkout -b.'
+          },
+          {
+            title: '2.2 Resolución de conflictos paso a paso',
+            time: '28:40',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Cómo entender las marcas de conflicto y resolver discrepancias limpiamente.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-git-1',
+        name: 'Guia_Comandos_Git_Imprescindibles_2026.pdf',
+        size: '1.9 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '1.2 El ciclo de vida de un cambio: git add, commit y log'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Cuál es la función principal de un archivo .gitignore?',
+        options: [
+          'Especificar archivos que Git nunca debe rastrear ni subir al repositorio',
+          'Ocultar los errores del código',
+          'Borrar el historial de commits anteriores',
+          'Acelerar la conexión a internet'
+        ],
+        correctIndex: 0
+      }
+    ]
+  },
+  {
+    id: 11,
+    title: 'Estructuras de Datos y Algoritmos para Entrevistas Técnicas (2026)',
+    category: 'Backend',
+    level: 'Intermedio',
+    instructor: 'Roberto Cruz',
+    rating: 4.8,
+    reviews: 820,
+    students: 820,
+    duration: '30h 0m',
+    lessons: 5,
+    price: 69,
+    modelo_cobro: 'Ambos',
+    status: 'PUBLICADO',
+    image: 'https://images.unsplash.com/photo-1516116211227-bbc679091993?auto=format&fit=crop&w=800&q=80',
+    description: 'Prepárate para superar entrevistas técnicas junior y resolver problemas de alta eficiencia. Aprende Notación Big-O, pilas, colas, árboles, grafos, algoritmos de búsqueda y ordenamiento.',
+    modules: [
+      {
+        title: 'Módulo 1: Complejidad Algorítmica y Notación Big-O',
+        duration: '8h 0m',
+        lessons: [
+          {
+            title: '1.1 ¿Qué es la Notación Big-O? Complejidad Temporal y Espacial',
+            time: '24:30',
+            free: true,
+            video_url: 'https://www.youtube.com/embed/7iobxzd_2wY',
+            description: 'Comparativa entre O(1), O(log n), O(n), O(n log n) y O(n^2).'
+          },
+          {
+            title: '1.2 Arreglos dinámicos vs Listas enlazadas',
+            time: '26:10',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Costos de inserción, eliminación y búsqueda en memoria.'
+          }
+        ]
+      },
+      {
+        title: 'Módulo 2: Pilas, Colas y Búsqueda Binaria',
+        duration: '11h 0m',
+        lessons: [
+          {
+            title: '2.1 Pilas (Stacks) y Colas (Queues): Patrones LIFO y FIFO',
+            time: '25:40',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Casos de uso reales: historial de navegación y balanceo de paréntesis.'
+          },
+          {
+            title: '2.2 Algoritmo de Búsqueda Binaria (Binary Search)',
+            time: '28:15',
+            free: false,
+            video_url: 'https://www.youtube.com/embed/W6NZfCO5SIk',
+            description: 'Resolución de problemas en O(log n) dividiendo el espacio de búsqueda a la mitad.'
+          }
+        ]
+      }
+    ],
+    recursos: [
+      {
+        id: 'res-dsa-1',
+        name: 'Guia_Big_O_Complejidad_y_Estructuras_2026.pdf',
+        size: '2.6 MB',
+        type: 'pdf',
+        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        lesson: '1.1 ¿Qué es la Notación Big-O? Complejidad Temporal y Espacial'
+      }
+    ],
+    evaluacion_preguntas: [
+      {
+        id: 1,
+        question: '¿Cuál es la complejidad temporal de la Búsqueda Binaria en el peor caso?',
+        options: [
+          'O(log n)',
+          'O(n^2)',
+          'O(1)',
+          'O(n!)'
+        ],
+        correctIndex: 0
+      }
+    ]
+  }
 ]
-
-interface SandboxCheckout {
-  type: 'course' | 'membership'
-  courseId?: number
-  plan?: MembershipPlan
-  title: string
-  price: number
-}
 
 export default function App() {
   const [registeredUsers, setRegisteredUsers] = useState<UserData[]>(() => {
@@ -255,9 +708,37 @@ export default function App() {
   })
 
   // Curso seleccionado para editar en el panel de Admin (null = Crear curso nuevo)
-  const [editingCourse, setEditingCourse] = useState<CourseItem | null>(null)
+  const [editingCourse, setEditingCourse] = useState<CourseItem | null>(() => {
+    try {
+      const savedId = localStorage.getItem('learnhub_editing_course_id')
+      if (!savedId) return null
+      const savedCourses = localStorage.getItem('learnhub_courses_v5')
+      const list: CourseItem[] = savedCourses ? JSON.parse(savedCourses) : INITIAL_COURSES
+      return list.find((c) => c.id === Number(savedId)) || null
+    } catch {
+      return null
+    }
+  })
 
-  const [activeCourseId, setActiveCourseId] = useState<number>(2)
+  // Persistencia de ID de curso activo para que no se resetee con F5 en el Aula Virtual
+  const [activeCourseId, setActiveCourseId] = useState<number>(() => {
+    const saved = localStorage.getItem('learnhub_active_course_id')
+    return saved ? Number(saved) : 2
+  })
+
+  useEffect(() => {
+    if (activeCourseId) {
+      localStorage.setItem('learnhub_active_course_id', String(activeCourseId))
+    }
+  }, [activeCourseId])
+
+  useEffect(() => {
+    if (editingCourse) {
+      localStorage.setItem('learnhub_editing_course_id', String(editingCourse.id))
+    } else if (currentView !== 'admin-editor') {
+      localStorage.removeItem('learnhub_editing_course_id')
+    }
+  }, [editingCourse, currentView])
 
   const [courseProgress, setCourseProgress] = useState<Record<number, string[]>>({
     2: ['0-0', '0-1', '0-2'],
@@ -268,26 +749,13 @@ export default function App() {
   const [plansModalOpen, setPlansModalOpen] = useState(false)
   const [legalModalOpen, setLegalModalOpen] = useState(false)
 
-  const [savedCards, setSavedCards] = useState<SavedCard[]>([
-    { id: 'c1', brand: 'Visa', last4: '4821', holder: 'BRUNO CUSI', expiry: '09/28' },
-    { id: 'c2', brand: 'Mastercard', last4: '7823', holder: 'BRUNO CUSI', expiry: '11/27' },
-  ])
+  const [savedCards, setSavedCards] = useState<SavedCard[]>([])
 
   const [sandboxModal, setSandboxModal] = useState<SandboxCheckout | null>(null)
-  const [paymentMode, setPaymentMode] = useState<'saved' | 'new' | 'paypal'>('saved')
-  const [selectedCardId, setSelectedCardId] = useState<string>('c1')
-  const [newCardNumber, setNewCardNumber] = useState('')
-  const [newCardHolder, setNewCardHolder] = useState('')
-  const [newCardExpiry, setNewCardExpiry] = useState('')
-  const [newCardCvv, setNewCardCvv] = useState('')
-  const [saveNewCardCheck, setSaveNewCardCheck] = useState(true)
   const [checkoutError, setCheckoutError] = useState('')
   const [paying, setPaying] = useState(false)
 
   const [profileModalOpen, setProfileModalOpen] = useState(false)
-  const [editNombre, setEditNombre] = useState('')
-  const [editApellido, setEditApellido] = useState('')
-  const [profileSavedMsg, setProfileSavedMsg] = useState(false)
 
   const [transactions, setTransactions] = useState([
     { id: 'PAY-8821', student: 'Jorge López', item: 'React + TypeScript', date: '30 sep 2026', method: 'Visa •••• 4521', amount: '$89', type: 'INDIVIDUAL', status: 'COMPLETADO' },
@@ -296,9 +764,22 @@ export default function App() {
     { id: 'PAY-8818', student: 'Valentina Torres', item: 'CSS Avanzado', date: '27 sep 2026', method: 'Mastercard •••• 3456', amount: '$49', type: 'INDIVIDUAL', status: 'REEMBOLSADO' },
   ])
 
+  // Cargar transacciones financieras reales desde MySQL
+  const cargarTransacciones = async () => {
+    try {
+      const res = await apiObtenerTransaccionesAdmin()
+      if (res && res.transacciones && res.transacciones.length > 0) {
+        setTransactions(res.transacciones)
+      }
+    } catch (err: any) {
+      console.warn('⚠️ No se pudieron cargar transacciones de MySQL:', err.message)
+    }
+  }
+
   // 🚀 Conexión con el Backend: Cargar cursos desde Node.js (MySQL en Aiven)
   useEffect(() => {
-    apiObtenerCursos()
+    const isAdmin = currentUser?.role === 'admin'
+    apiObtenerCursos(isAdmin)
       .then((cursosBackend) => {
         if (cursosBackend && cursosBackend.length > 0) {
           console.log('✅ Cursos recibidos desde el backend de Node.js:', cursosBackend)
@@ -308,7 +789,11 @@ export default function App() {
       .catch((err) => {
         console.warn('⚠️ Backend no disponible en localhost:4000, usando catálogo de respaldo:', err.message)
       })
-  }, [])
+
+    if (isAdmin) {
+      cargarTransacciones()
+    }
+  }, [currentUser?.role, currentView])
 
   useEffect(() => {
     localStorage.setItem('learnhub_users_v5', JSON.stringify(registeredUsers))
@@ -340,7 +825,13 @@ export default function App() {
     if (user.purchasedCourseIds && user.purchasedCourseIds.length > 0) {
       setActiveCourseId(user.purchasedCourseIds[0])
     }
-    setCurrentView(user.role === 'admin' ? 'admin-overview' : 'catalog')
+    if (user.role === 'admin') {
+      setCurrentView('admin-overview')
+    } else if (user.role === 'teacher') {
+      setCurrentView('teacher-panel')
+    } else {
+      setCurrentView('catalog')
+    }
   }
 
   const handleRegisterUser = (newUser: UserData) => {
@@ -350,8 +841,10 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null)
     setCurrentView('login')
+    localStorage.removeItem('learnhub_jwt')
     localStorage.removeItem('learnhub_session_v5')
     localStorage.removeItem('learnhub_view_v5')
+    localStorage.removeItem('learnhub_active_course_id')
   }
 
   const handleOpenCoursePlayer = (courseId: number) => {
@@ -382,35 +875,114 @@ export default function App() {
     setCurrentView('admin-editor')
   }
 
-  const handleSaveCourseFromEditor = (savedCourse: CourseItem) => {
-    setCourses((prev) => {
-      const exists = prev.some((c) => c.id === savedCourse.id)
-      if (exists) {
-        return prev.map((c) => (c.id === savedCourse.id ? savedCourse : c))
+  const handleSaveCourseFromEditor = async (savedCourse: CourseItem) => {
+    const isNew = !courses.some((c) => c.id === savedCourse.id)
+
+    try {
+      const payload = {
+        titulo: savedCourse.title,
+        descripcion: savedCourse.description,
+        categoria: savedCourse.category,
+        nivel: savedCourse.level,
+        precio: savedCourse.price,
+        modelo_cobro: savedCourse.modelo_cobro || 'Ambos',
+        status: savedCourse.status,
+        imagen_url: savedCourse.image,
+        instructor: savedCourse.instructor,
+        duracion: savedCourse.duration,
+        modules: savedCourse.modules,
+        recursos: savedCourse.recursos,
+        evaluacion_preguntas: savedCourse.evaluacion_preguntas,
       }
-      return [savedCourse, ...prev]
-    })
-  }
 
-  const handleToggleCourseStatus = (courseId: number) => {
-    setCourses((prev) =>
-      prev.map((c) =>
-        c.id === courseId
-          ? { ...c, status: c.status === 'PUBLICADO' ? 'BORRADOR' : 'PUBLICADO' }
-          : c
-      )
-    )
-  }
+      if (isNew) {
+        const res = await apiCrearCurso(payload)
+        const idGenerado = res.curso?.id_curso || savedCourse.id
+        const persistentCourse: CourseItem = { ...savedCourse, id: idGenerado }
+        setCourses((prev) => [persistentCourse, ...prev.filter((c) => c.id !== persistentCourse.id)])
+      } else {
+        await apiActualizarCurso(savedCourse.id, payload)
+        setCourses((prev) =>
+          prev.map((c) => (c.id === savedCourse.id ? savedCourse : c))
+        )
+      }
 
-  const handleDuplicateCourse = (course: CourseItem) => {
-    const copy: CourseItem = {
-      ...course,
-      id: Date.now(),
-      title: `${course.title} (Copia)`,
-      status: 'BORRADOR',
-      students: 0,
+      // Sincronizar catálogo completo desde MySQL incluyendo borradores del admin
+      const cursosActualizados = await apiObtenerCursos(true)
+      if (cursosActualizados && cursosActualizados.length > 0) {
+        setCourses(cursosActualizados)
+      }
+    } catch (err: any) {
+      console.warn('⚠️ Guardando curso en estado local:', err.message)
+      setCourses((prev) => {
+        const exists = prev.some((c) => c.id === savedCourse.id)
+        if (exists) {
+          return prev.map((c) => (c.id === savedCourse.id ? savedCourse : c))
+        }
+        return [savedCourse, ...prev]
+      })
     }
-    setCourses((prev) => [copy, ...prev])
+  }
+
+  const handleToggleCourseStatus = async (courseId: number) => {
+    const course = courses.find((c) => c.id === courseId)
+    if (!course) return
+    const nextStatus = course.status === 'PUBLICADO' ? 'BORRADOR' : 'PUBLICADO'
+
+    setCourses((prev) =>
+      prev.map((c) => (c.id === courseId ? { ...c, status: nextStatus } : c))
+    )
+
+    try {
+      await apiActualizarCurso(courseId, { status: nextStatus })
+    } catch (err: any) {
+      console.warn('⚠️ Error al actualizar estado en MySQL:', err.message)
+    }
+  }
+
+  const handleDuplicateCourse = async (course: CourseItem) => {
+    try {
+      const res = await apiCrearCurso({
+        titulo: `${course.title} (Copia)`,
+        descripcion: course.description,
+        categoria: course.category,
+        nivel: course.level,
+        precio: course.price,
+        status: 'BORRADOR',
+        imagen_url: course.image,
+        instructor: course.instructor,
+        duracion: course.duration,
+        modules: course.modules,
+      })
+      const newId = res.curso?.id_curso || Date.now()
+      const copy: CourseItem = {
+        ...course,
+        id: newId,
+        title: `${course.title} (Copia)`,
+        status: 'BORRADOR',
+        students: 0,
+      }
+      setCourses((prev) => [copy, ...prev])
+    } catch (err: any) {
+      console.warn('⚠️ Guardando copia local:', err.message)
+      const copy: CourseItem = {
+        ...course,
+        id: Date.now(),
+        title: `${course.title} (Copia)`,
+        status: 'BORRADOR',
+        students: 0,
+      }
+      setCourses((prev) => [copy, ...prev])
+    }
+  }
+
+  const handleDeleteCourse = async (courseId: number) => {
+    setCourses((prev) => prev.filter((c) => c.id !== courseId))
+    try {
+      await apiEliminarCurso(courseId)
+    } catch (err: any) {
+      console.warn('⚠️ Error al eliminar curso en MySQL:', err.message)
+    }
   }
 
   const handleRefundTransaction = (txId: string) => {
@@ -427,76 +999,31 @@ export default function App() {
 
   const openProfileModal = () => {
     if (!currentUser) return
-    setEditNombre(currentUser.nombre)
-    setEditApellido(currentUser.apellido)
-    setProfileSavedMsg(false)
     setProfileModalOpen(true)
   }
 
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!currentUser) return
-    const updated: UserData = {
-      ...currentUser,
-      nombre: editNombre.trim() || currentUser.nombre,
-      apellido: editApellido.trim() || currentUser.apellido,
-    }
-    updateCurrentUserData(updated)
-    setProfileSavedMsg(true)
-    setTimeout(() => setProfileModalOpen(false), 800)
+  const handleProfileUpdated = (updatedUser: UserData) => {
+    updateCurrentUserData(updatedUser)
+  }
+
+  const handlePasswordChanged = () => {
+    setProfileModalOpen(false)
+    handleLogout()
   }
 
   const fullName = currentUser ? `${currentUser.nombre} ${currentUser.apellido}` : 'Bruno Cusi'
 
-  const formatCardNumber = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 16)
-    return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
-  }
-
-  const formatExpiry = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 4)
-    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`
-    return digits
-  }
-
-  const handleConfirmSandboxPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleConfirmSandboxPayment = async ({
+    methodUsed,
+    last4,
+    cardToSave,
+  }: {
+    methodUsed: string
+    last4: string
+    cardToSave: SavedCard | null
+  }) => {
     if (!sandboxModal || !currentUser || paying) return
     setCheckoutError('')
-
-    let methodUsed = 'PayPal Sandbox'
-    let last4ForApi = ''
-    let cardToSave: SavedCard | null = null
-
-    if (paymentMode === 'saved') {
-      const card = savedCards.find((c) => c.id === selectedCardId) || savedCards[0]
-      methodUsed = card ? `${card.brand} •••• ${card.last4}` : 'Visa •••• 4821'
-      last4ForApi = card ? card.last4 : ''
-    } else if (paymentMode === 'new') {
-      const digits = newCardNumber.replace(/\D/g, '')
-      if (digits.length < 15) {
-        setCheckoutError('Ingresa un número de tarjeta válido de 16 dígitos.')
-        return
-      }
-      if (newCardExpiry.length < 5 || newCardCvv.length < 3) {
-        setCheckoutError('Completa la fecha de vencimiento (MM/AA) y el código CVV.')
-        return
-      }
-      const brand: 'Visa' | 'Mastercard' = digits.startsWith('5') ? 'Mastercard' : 'Visa'
-      const last4 = digits.slice(-4)
-      methodUsed = `${brand} •••• ${last4}`
-      last4ForApi = last4
-
-      if (saveNewCardCheck) {
-        cardToSave = {
-          id: `card-${Date.now()}`,
-          brand,
-          last4,
-          holder: newCardHolder.trim() || fullName.toUpperCase(),
-          expiry: newCardExpiry,
-        }
-      }
-    }
 
     // 🚀 Pago real contra el backend: guarda en Transaccion / Inscripcion / Suscripcion (MySQL en Aiven)
     setPaying(true)
@@ -506,12 +1033,11 @@ export default function App() {
       }
       if (sandboxModal.type === 'membership' && sandboxModal.plan) {
         const idPlan = PLAN_DB_ID[sandboxModal.plan.months]
-        await apiSuscribirPlan(idPlan, last4ForApi)
+        await apiSuscribirPlan(idPlan, last4)
       } else if (sandboxModal.type === 'course' && sandboxModal.courseId) {
-        await apiComprarCurso(sandboxModal.courseId, last4ForApi)
+        await apiComprarCurso(sandboxModal.courseId, last4)
       }
     } catch (err: any) {
-      // Pago rechazado o error del servidor: no se desbloquea nada
       setCheckoutError(err?.message || 'No se pudo procesar el pago.')
       setPaying(false)
       return
@@ -519,8 +1045,7 @@ export default function App() {
     setPaying(false)
 
     if (cardToSave) {
-      setSavedCards((prev) => [...prev, cardToSave!])
-      setSelectedCardId(cardToSave.id)
+      setSavedCards((prev) => [...prev, cardToSave])
     }
 
     if (sandboxModal.type === 'membership' && sandboxModal.plan) {
@@ -567,9 +1092,7 @@ export default function App() {
     }
 
     setSandboxModal(null)
-    setNewCardNumber('')
-    setNewCardExpiry('')
-    setNewCardCvv('')
+    cargarTransacciones()
   }
 
   const handleCancelMembership = () => {
@@ -580,16 +1103,11 @@ export default function App() {
     })
   }
 
-  const studentHasAnyAccess =
-    Boolean(currentUser?.hasMembership) ||
-    Boolean(currentUser?.purchasedCourseIds && currentUser.purchasedCourseIds.length > 0) ||
-    currentView === 'player'
-
   const currentPlayingCourse =
     courses.find((c) => c.id === activeCourseId) || courses[0]
 
   return (
-    <div className={currentView === 'login' ? 'min-h-screen' : 'min-h-screen pb-20'}>
+    <div className="min-h-screen">
       {currentView === 'login' && (
         <LoginView
           onLogin={handleLogin}
@@ -616,6 +1134,7 @@ export default function App() {
           membershipPlanName={activePlan.name}
           purchasedCourseIds={currentUser?.purchasedCourseIds || []}
           userName={fullName}
+          userRole={currentUser?.role}
           onOpenProfile={openProfileModal}
         />
       )}
@@ -639,12 +1158,27 @@ export default function App() {
           onOpenProfile={openProfileModal}
         />
       )}
+      {currentView === 'teacher-panel' && (
+        <TeacherDashboard
+          courses={courses}
+          currentUser={currentUser}
+          onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
+          onOpenCoursePlayer={handleOpenCoursePlayer}
+          onEditCourse={handleStartEditCourse}
+          onCreateNewCourse={handleStartCreateCourse}
+          onOpenProfile={openProfileModal}
+        />
+      )}
       {currentView === 'player' && (
         <PlayerView
           course={currentPlayingCourse}
           completedLessonIds={courseProgress[currentPlayingCourse.id] || []}
           onToggleLessonComplete={handleToggleLessonComplete}
           onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
+          currentUser={currentUser}
+          onUpdateCourse={(updated) => {
+            setCourses((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+          }}
         />
       )}
       {currentView === 'admin-overview' && (
@@ -664,7 +1198,8 @@ export default function App() {
           onEditCourse={handleStartEditCourse}
           onToggleCourseStatus={handleToggleCourseStatus}
           onDuplicateCourse={handleDuplicateCourse}
-          onDeleteCourse={(id) => setCourses(courses.filter((c) => c.id !== id))}
+          onDeleteCourse={handleDeleteCourse}
+          onOpenCoursePlayer={handleOpenCoursePlayer}
         />
       )}
       {currentView === 'admin-editor' && (
@@ -672,6 +1207,7 @@ export default function App() {
           initialCourse={editingCourse}
           onSaveCourse={handleSaveCourseFromEditor}
           onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
+          currentUser={currentUser}
         />
       )}
       {currentView === 'admin-finance' && (
@@ -681,506 +1217,47 @@ export default function App() {
           onRefundTransaction={handleRefundTransaction}
           onRetryTransaction={handleRetryTransaction}
           onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
+          onRefresh={cargarTransacciones}
         />
       )}
 
-      {/* Modal Selector de Planes por Meses */}
-      {plansModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-7 shadow-2xl my-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700 mb-1.5">
-                  MEMBRESÍA LEARNHUB PRO
-                </span>
-                <h2 className="text-2xl font-extrabold text-slate-900">
-                  Elige el plan de meses que mejor se adapte a tu estudio
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Todos los planes desbloquean acceso ilimitado a todos los cursos del catálogo, código fuente y seguimiento de progreso.
-                </p>
-              </div>
-              <button
-                onClick={() => setPlansModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold flex items-center justify-center cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Modal Selector de Planes por Meses (Modularizado) */}
+      <PlansModal
+        isOpen={plansModalOpen}
+        onClose={() => setPlansModalOpen(false)}
+        plans={MEMBERSHIP_PLANS}
+        onSelectPlan={(plan) => {
+          setPlansModalOpen(false)
+          setCheckoutError('')
+          setSandboxModal({
+            type: 'membership',
+            plan,
+            title: `${plan.name} — Acceso Ilimitado`,
+            price: plan.totalPrice,
+          })
+        }}
+      />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {MEMBERSHIP_PLANS.map((plan) => {
-                const isRecommended = plan.months === 6
-                return (
-                  <div
-                    key={plan.id}
-                    className={`rounded-2xl p-6 flex flex-col justify-between border-2 transition relative ${
-                      isRecommended
-                        ? 'border-violet-600 bg-violet-50/40 shadow-lg'
-                        : 'border-slate-200 bg-white'
-                    }`}
-                  >
-                    {plan.badge && (
-                      <span className="absolute -top-3 left-5 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-violet-600 text-white shadow-xs">
-                        {plan.badge}
-                      </span>
-                    )}
+      {/* Modal Pasarela Sandbox de Pagos (Modularizado) */}
+      <CheckoutModal
+        modalData={sandboxModal}
+        onClose={() => setSandboxModal(null)}
+        savedCards={savedCards}
+        fullName={fullName}
+        userEmail={currentUser?.correo}
+        paying={paying}
+        checkoutError={checkoutError}
+        onConfirmPayment={handleConfirmSandboxPayment}
+      />
 
-                    <div>
-                      <div className="text-sm font-extrabold text-slate-900 mb-1">{plan.name}</div>
-                      <div className="text-xs text-slate-500 mb-4">
-                        Duración: <strong>{plan.months} {plan.months === 1 ? 'mes' : 'meses'}</strong>
-                      </div>
-
-                      <div className="mb-1">
-                        <span className="text-3xl font-extrabold text-slate-900">
-                          ${plan.monthlyEquivalent}
-                        </span>
-                        <span className="text-xs text-slate-500"> USD / mes</span>
-                      </div>
-                      <div className="text-[11px] text-violet-700 font-semibold mb-5">
-                        {plan.months === 1
-                          ? 'Cobro mensual de $29 USD'
-                          : `Pago único de $${plan.totalPrice} USD por ${plan.months} meses`}
-                      </div>
-
-                      <ul className="space-y-2.5 text-xs text-slate-700 mb-6">
-                        {plan.features.map((f, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-emerald-600 font-bold">✓</span>
-                            <span>{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setPlansModalOpen(false)
-                        setCheckoutError('')
-                        setSandboxModal({
-                          type: 'membership',
-                          plan,
-                          title: `${plan.name} — Acceso Ilimitado`,
-                          price: plan.totalPrice,
-                        })
-                      }}
-                      className={`w-full py-2.5 rounded-xl text-xs font-bold cursor-pointer transition ${
-                        isRecommended
-                          ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-md'
-                          : 'bg-slate-900 hover:bg-slate-800 text-white'
-                      }`}
-                    >
-                      Elegir {plan.months} {plan.months === 1 ? 'mes' : 'meses'} (${plan.totalPrice})
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Pasarela Sandbox con Tarjeta 3D */}
-      {sandboxModal && (
-        <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-7 shadow-2xl my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700 mb-1">
-                  {sandboxModal.type === 'membership'
-                    ? `SUSCRIPCIÓN POR ${sandboxModal.plan?.months} MES(ES)`
-                    : 'COMPRA DE CURSO INDIVIDUAL'}
-                </span>
-                <h3 className="text-lg font-extrabold text-slate-900">
-                  Pasarela de Pago Segura (Entorno Sandbox)
-                </h3>
-              </div>
-              <button
-                onClick={() => setSandboxModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold flex items-center justify-center cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl mb-5">
-              <button
-                type="button"
-                onClick={() => setPaymentMode('saved')}
-                className={`py-2 text-xs font-semibold rounded-lg cursor-pointer transition ${
-                  paymentMode === 'saved'
-                    ? 'bg-white text-violet-700 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                💳 Tarjeta guardada ({savedCards.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentMode('new')
-                  setNewCardHolder(fullName.toUpperCase())
-                }}
-                className={`py-2 text-xs font-semibold rounded-lg cursor-pointer transition ${
-                  paymentMode === 'new'
-                    ? 'bg-white text-violet-700 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                ➕ Nueva tarjeta
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMode('paypal')}
-                className={`py-2 text-xs font-semibold rounded-lg cursor-pointer transition ${
-                  paymentMode === 'paypal'
-                    ? 'bg-white text-violet-700 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                🅿️ PayPal Sandbox
-              </button>
-            </div>
-
-            {checkoutError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium">
-                {checkoutError}
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmSandboxPayment}>
-              {paymentMode === 'saved' && (
-                <div className="space-y-3 mb-6">
-                  <div className="text-xs font-semibold text-slate-700">
-                    Selecciona una tarjeta de tu billetera:
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {savedCards.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => setSelectedCardId(c.id)}
-                        className={`p-4 rounded-2xl border-2 cursor-pointer transition ${
-                          selectedCardId === c.id
-                            ? 'border-violet-600 bg-violet-50/40'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs font-extrabold text-slate-900">{c.brand}</span>
-                          <span className="text-[11px] text-slate-400">Exp. {c.expiry}</span>
-                        </div>
-                        <div className="text-sm font-mono font-bold text-slate-800 mb-1">
-                          •••• •••• •••• {c.last4}
-                        </div>
-                        <div className="text-[10px] text-slate-500">{c.holder}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {paymentMode === 'new' && (
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mb-6 items-center">
-                  <div className="md:col-span-5">
-                    <div className="p-5 rounded-2xl bg-gradient-to-tr from-slate-950 via-violet-950 to-violet-700 text-white shadow-lg flex flex-col justify-between h-44">
-                      <div className="flex justify-between items-center">
-                        <div className="w-9 h-6 rounded bg-amber-300/80" />
-                        <span className="text-xs font-extrabold tracking-widest">
-                          {newCardNumber.startsWith('5') ? 'MASTERCARD' : 'VISA'}
-                        </span>
-                      </div>
-                      <div className="text-sm font-mono tracking-widest my-2">
-                        {newCardNumber || '•••• •••• •••• ••••'}
-                      </div>
-                      <div className="flex justify-between items-end text-[10px]">
-                        <div>
-                          <div className="text-[8px] text-violet-200 uppercase">Titular</div>
-                          <div className="font-bold truncate max-w-[110px]">
-                            {newCardHolder || fullName.toUpperCase()}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[8px] text-violet-200 uppercase">Vence</div>
-                          <div className="font-bold">{newCardExpiry || 'MM/AA'}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-7 space-y-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Número de tarjeta
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="4532 8910 2345 6789"
-                        value={newCardNumber}
-                        onChange={(e) => setNewCardNumber(formatCardNumber(e.target.value))}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Nombre del titular
-                      </label>
-                      <input
-                        type="text"
-                        value={newCardHolder}
-                        onChange={(e) => setNewCardHolder(e.target.value.toUpperCase())}
-                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
-                          Expiración (MM/AA)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="10/29"
-                          value={newCardExpiry}
-                          onChange={(e) => setNewCardExpiry(formatExpiry(e.target.value))}
-                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
-                          CVV
-                        </label>
-                        <input
-                          type="password"
-                          placeholder="123"
-                          maxLength={4}
-                          value={newCardCvv}
-                          onChange={(e) =>
-                            setNewCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))
-                          }
-                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-slate-600 pt-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={saveNewCardCheck}
-                        onChange={(e) => setSaveNewCardCheck(e.target.checked)}
-                      />
-                      Guardar esta tarjeta en mi cuenta para futuros pagos
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {paymentMode === 'paypal' && (
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center mb-6">
-                  <div className="text-2xl mb-1">🅿️</div>
-                  <div className="text-sm font-bold text-slate-900">
-                    Cuenta de pruebas PayPal Sandbox conectada
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Se procesará la simulación de cargo con el correo <strong>{currentUser?.correo}</strong> sin usar dinero real.
-                  </p>
-                </div>
-              )}
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div>
-                  <div className="text-[11px] text-slate-500">Concepto a procesar:</div>
-                  <div className="text-sm font-extrabold text-slate-900">{sandboxModal.title}</div>
-                  {sandboxModal.plan && (
-                    <div className="text-[11px] text-emerald-600 font-semibold">
-                      Vigencia garantizada hasta el {sandboxModal.plan.expiresLabel}
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className="text-[11px] text-slate-400">Total Sandbox</div>
-                  <div className="text-2xl font-extrabold text-slate-900">
-                    ${sandboxModal.price} USD
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2.5 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setSandboxModal(null)}
-                  className="px-4 py-2.5 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={paying}
-                  className="px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold cursor-pointer shadow-md"
-                >
-                  {paying ? 'Procesando pago...' : `Confirmar pago de $${sandboxModal.price} USD ›`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Mi Perfil */}
-      {profileModalOpen && currentUser && (
-        <div className="fixed inset-0 bg-slate-900/55 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-base font-bold text-slate-900 mb-1">Mi Perfil en LearnHub</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Actualiza tus datos personales ({currentUser.correo})
-            </p>
-
-            {profileSavedMsg && (
-              <div className="mb-3 p-2.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold">
-                ✓ Datos actualizados correctamente
-              </div>
-            )}
-
-            <form onSubmit={handleSaveProfile} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  required
-                  value={editNombre}
-                  onChange={(e) => setEditNombre(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido</label>
-                <input
-                  type="text"
-                  required
-                  value={editApellido}
-                  onChange={(e) => setEditApellido(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setProfileModalOpen(false)}
-                  className="px-3.5 py-2 border border-slate-200 rounded-lg text-xs cursor-pointer"
-                >
-                  Cerrar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-semibold cursor-pointer"
-                >
-                  Guardar cambios
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Barra Flotante Inferior según el Rol */}
-      {currentView !== 'login' && currentUser && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#11131a] border border-slate-700 rounded-xl px-4 py-2 flex items-center gap-2 z-40 shadow-2xl">
-          {currentUser.role === 'student' && (
-            <>
-              <span className="text-[9px] font-bold text-slate-400 mr-1">ESTUDIANTE</span>
-              <button
-                onClick={() => setCurrentView('catalog')}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'catalog'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Catálogo
-              </button>
-
-              {studentHasAnyAccess && (
-                <button
-                  onClick={() => setCurrentView('player')}
-                  className={`px-3 py-1 rounded-md text-xs cursor-pointer transition flex items-center gap-1.5 ${
-                    currentView === 'player'
-                      ? 'bg-violet-600 text-white font-semibold'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <span>▶</span>
-                  <span className="max-w-[130px] truncate">
-                    {currentPlayingCourse.title}
-                  </span>
-                </button>
-              )}
-
-              <button
-                onClick={() => setCurrentView('dashboard')}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'dashboard'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Mi aprendizaje
-              </button>
-            </>
-          )}
-
-          {currentUser.role === 'admin' && (
-            <>
-              <span className="text-[9px] font-bold text-slate-400 mr-1">ADMIN</span>
-              <button
-                onClick={() => setCurrentView('admin-overview')}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'admin-overview'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Overview
-              </button>
-              <button
-                onClick={() => setCurrentView('admin-catalog')}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'admin-catalog'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Cursos
-              </button>
-              <button
-                onClick={handleStartCreateCourse}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'admin-editor'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Editor
-              </button>
-              <button
-                onClick={() => setCurrentView('admin-finance')}
-                className={`px-3 py-1 rounded-md text-xs cursor-pointer transition ${
-                  currentView === 'admin-finance'
-                    ? 'bg-violet-600 text-white font-semibold'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Finanzas
-              </button>
-            </>
-          )}
-
-          <div className="h-4 w-[1px] bg-slate-700 mx-1" />
-          <button
-            onClick={handleLogout}
-            className="px-2.5 py-1 rounded-md text-xs text-rose-400 hover:bg-rose-500/10 font-medium cursor-pointer"
-          >
-            Salir
-          </button>
-        </div>
-      )}
+      {/* Modal Mi Perfil con Persistencia en MySQL y BCrypt */}
+      <ProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={handleProfileUpdated}
+        onPasswordChanged={handlePasswordChanged}
+      />
 
       {/* Puntos 01 y 02: Modal Legal y Privacidad (Ley N.° 29733 de Perú) */}
       <LegalModal isOpen={legalModalOpen} onClose={() => setLegalModalOpen(false)} />
@@ -1192,7 +1269,7 @@ export default function App() {
       <WhatsAppButton />
 
       {/* Punto 15: Vista 404 personalizada si la ruta no existe */}
-      {!['login', 'catalog', 'dashboard', 'player', 'admin-overview', 'admin-catalog', 'admin-editor', 'admin-finance'].includes(currentView) && (
+      {!['login', 'catalog', 'dashboard', 'player', 'teacher-panel', 'admin-overview', 'admin-catalog', 'admin-editor', 'admin-finance'].includes(currentView) && (
         <NotFoundView onGoHome={() => setCurrentView('catalog')} />
       )}
     </div>

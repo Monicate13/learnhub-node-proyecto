@@ -313,7 +313,7 @@ export default function DashboardView({
                     <div className="flex justify-between">
                       <span className="text-slate-400">Tarjeta vinculada:</span>
                       <strong>
-                        {savedCards[0] ? `${savedCards[0].brand} •••• ${savedCards[0].last4}` : 'Visa •••• 4821'}
+                        {savedCards[0] ? `${savedCards[0].brand} •••• ${savedCards[0].last4}` : 'No registrada'}
                       </strong>
                     </div>
                   </div>

@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { apiLogin, apiRegistro, apiObtenerMiAprendizaje } from '../services/api'
 
+export type UserRole = 'student' | 'teacher' | 'admin'
+
 export interface UserData {
   id: number
   nombre: string
   apellido: string
   correo: string
-  role: 'student' | 'admin'
+  role: UserRole
   password?: string
   hasMembership?: boolean
   purchasedCourseIds?: number[]
@@ -24,10 +26,9 @@ export default function LoginView({
   onRegisterUser,
 }: LoginViewProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'recover'>('login')
-  const [selectedRole, setSelectedRole] = useState<'student' | 'admin'>('student')
 
-  const [email, setEmail] = useState('estudiante@utp.edu.pe')
-  const [password, setPassword] = useState('12345678')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,12 +38,7 @@ export default function LoginView({
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regConfirm, setRegConfirm] = useState('')
-
-  const handleRoleSwitch = (role: 'student' | 'admin') => {
-    setSelectedRole(role)
-    setErrorMsg('')
-    setEmail(role === 'admin' ? 'admin@learnhub.pe' : 'estudiante@utp.edu.pe')
-  }
+  const [regRole, setRegRole] = useState<'student' | 'teacher'>('student')
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { label: '', color: 'bg-slate-200', width: '0%' }
@@ -60,10 +56,17 @@ export default function LoginView({
     setLoading(true)
 
     try {
-      // 1. Autenticación contra el backend real de Node.js (JWT)
+      // 1. Autenticación contra el backend real de Node.js (JWT y MySQL)
       const res = await apiLogin(email, password)
       if (res.token) {
         localStorage.setItem('learnhub_jwt', res.token)
+      }
+
+      let userRole: UserRole = 'student'
+      if (res.usuario?.rol === 'Administrador' || res.usuario?.id_rol === 2) {
+        userRole = 'admin'
+      } else if (res.usuario?.rol === 'Docente' || res.usuario?.id_rol === 3) {
+        userRole = 'teacher'
       }
 
       const backendUser: UserData = {
@@ -71,8 +74,8 @@ export default function LoginView({
         nombre: res.usuario?.nombre || 'Usuario',
         apellido: res.usuario?.apellido || '',
         correo: res.usuario?.correo || email,
-        role: res.usuario?.rol === 'Administrador' ? 'admin' : 'student',
-        hasMembership: res.usuario?.rol === 'Administrador',
+        role: userRole,
+        hasMembership: userRole === 'admin' || userRole === 'teacher',
         purchasedCourseIds: [],
       }
 
@@ -86,7 +89,7 @@ export default function LoginView({
           backendUser.hasMembership = true
         }
       } catch {
-        // Si falla, el usuario igual entra; solo no se precargan sus compras
+        // Si falla, el usuario igual entra
       }
 
       onLogin(backendUser)
@@ -109,14 +112,18 @@ export default function LoginView({
         }
         onLogin(found)
       } else {
-        const fallbackRole = email.toLowerCase().includes('admin') ? 'admin' : selectedRole
+        const lower = email.toLowerCase()
+        let fallbackRole: UserRole = 'student'
+        if (lower.includes('admin')) fallbackRole = 'admin'
+        else if (lower.includes('docente') || lower.includes('profesor') || lower.includes('teacher')) fallbackRole = 'teacher'
+
         onLogin({
           id: Date.now(),
-          nombre: fallbackRole === 'admin' ? 'Roberto' : 'Estudiante',
-          apellido: fallbackRole === 'admin' ? 'Cruz' : 'Nuevo',
+          nombre: fallbackRole === 'admin' ? 'Roberto' : fallbackRole === 'teacher' ? 'Carlos' : 'Estudiante',
+          apellido: fallbackRole === 'admin' ? 'Cruz' : fallbackRole === 'teacher' ? 'Mendoza' : 'Nuevo',
           correo: email,
           role: fallbackRole,
-          hasMembership: false,
+          hasMembership: fallbackRole === 'admin' || fallbackRole === 'teacher',
           purchasedCourseIds: [],
         })
       }
@@ -147,7 +154,13 @@ export default function LoginView({
 
     try {
       // 1. Registro real en el backend con hash BCrypt
-      const res = await apiRegistro(nombre.trim(), apellido.trim(), regEmail.trim(), regPassword)
+      const res = await apiRegistro(
+        nombre.trim(),
+        apellido.trim(),
+        regEmail.trim(),
+        regPassword,
+        regRole === 'teacher' ? 'Docente' : 'Estudiante'
+      )
       if (res.token) {
         localStorage.setItem('learnhub_jwt', res.token)
       }
@@ -157,9 +170,9 @@ export default function LoginView({
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         correo: regEmail.trim(),
-        role: 'student',
+        role: regRole,
         password: regPassword,
-        hasMembership: false,
+        hasMembership: regRole === 'teacher',
         purchasedCourseIds: [],
       }
 
@@ -185,9 +198,9 @@ export default function LoginView({
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         correo: regEmail.trim(),
-        role: 'student',
+        role: regRole,
         password: regPassword,
-        hasMembership: false,
+        hasMembership: regRole === 'teacher',
         purchasedCourseIds: [],
       }
 
@@ -259,35 +272,10 @@ export default function LoginView({
         <div className="w-full max-w-sm">
           {authMode === 'login' && (
             <>
-              <h2 className="text-2xl font-bold text-slate-900 mb-1">Bienvenido de nuevo</h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-1">Iniciar sesión</h2>
               <p className="text-xs text-slate-500 mb-5">
-                Inicia sesión en LearnHub para continuar tu aprendizaje.
+                Ingresa con tu correo y contraseña. El sistema identificará automáticamente si eres Estudiante, Docente o Administrador.
               </p>
-
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl mb-5">
-                <button
-                  type="button"
-                  onClick={() => handleRoleSwitch('student')}
-                  className={`py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                    selectedRole === 'student'
-                      ? 'bg-white text-violet-700 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🎓 Estudiante
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleRoleSwitch('admin')}
-                  className={`py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                    selectedRole === 'admin'
-                      ? 'bg-white text-violet-700 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🛡️ Administrador
-                </button>
-              </div>
 
               {errorMsg && (
                 <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium">
@@ -305,7 +293,7 @@ export default function LoginView({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tu@email.com"
+                    placeholder="correo@learnhub.com"
                     className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600"
                   />
                 </div>
@@ -319,6 +307,7 @@ export default function LoginView({
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
                     className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-violet-600"
                   />
                 </div>
@@ -379,6 +368,32 @@ export default function LoginView({
               )}
 
               <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Tipo de cuenta
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setRegRole('student')}
+                      className={`py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                        regRole === 'student' ? 'bg-white text-violet-700 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      🎓 Estudiante
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegRole('teacher')}
+                      className={`py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                        regRole === 'teacher' ? 'bg-white text-violet-700 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      👨‍🏫 Docente
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre</label>

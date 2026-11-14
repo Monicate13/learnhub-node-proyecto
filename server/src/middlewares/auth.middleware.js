@@ -28,4 +28,12 @@ export const soloAdmin = (req, res, next) => {
   next();
 };
 
+// Middleware para permitir tanto a Docentes como Administradores gestionar cursos y contenidos
+export const soloAdminODocente = (req, res, next) => {
+  if (!req.usuario || (req.usuario.id_rol !== 2 && req.usuario.id_rol !== 3)) {
+    return res.status(403).json({ error: "Acceso prohibido: Se requiere rol de Docente o Administrador" });
+  }
+  next();
+};
+
 export { JWT_SECRET };

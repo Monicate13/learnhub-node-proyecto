@@ -1,9 +1,10 @@
 interface AppNavProps {
-  activeView: 'catalog' | 'dashboard'
+  activeView: 'catalog' | 'dashboard' | 'teacher-panel' | string
   onNavigate: (view: string) => void
   searchQuery: string
   onSearchChange: (q: string) => void
   userName?: string
+  userRole?: 'student' | 'teacher' | 'admin'
   onOpenProfile?: () => void
 }
 
@@ -12,7 +13,8 @@ export default function AppNav({
   onNavigate,
   searchQuery,
   onSearchChange,
-  userName = 'Bruno Cusi',
+  userName = 'Usuario',
+  userRole = 'student',
   onOpenProfile,
 }: AppNavProps) {
   const initials = userName
@@ -26,7 +28,7 @@ export default function AppNav({
     <header className="h-16 bg-white border-b border-slate-200 px-7 flex items-center justify-between sticky top-0 z-40">
       <div className="flex items-center gap-6">
         <div
-          onClick={() => onNavigate('catalog')}
+          onClick={() => onNavigate(userRole === 'teacher' ? 'teacher-panel' : 'catalog')}
           className="flex items-center gap-2.5 font-extrabold text-sm tracking-wide cursor-pointer text-slate-900"
         >
           <span className="w-7 h-7 rounded-lg bg-violet-600 text-white flex items-center justify-center text-xs font-bold">
@@ -46,16 +48,43 @@ export default function AppNav({
           >
             Catálogo
           </button>
-          <button
-            onClick={() => onNavigate('dashboard')}
-            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
-              activeView === 'dashboard'
-                ? 'bg-slate-100 text-slate-900 font-semibold'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Mi aprendizaje
-          </button>
+
+          {userRole === 'teacher' ? (
+            <button
+              onClick={() => onNavigate('teacher-panel')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'teacher-panel'
+                  ? 'bg-violet-50 text-violet-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span>👨‍🏫</span>
+              <span>Mis Cursos Asignados</span>
+            </button>
+          ) : userRole === 'admin' ? (
+            <button
+              onClick={() => onNavigate('admin-overview')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                activeView.startsWith('admin')
+                  ? 'bg-amber-50 text-amber-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span>🛡️</span>
+              <span>Panel Admin</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => onNavigate('dashboard')}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
+                activeView === 'dashboard'
+                  ? 'bg-slate-100 text-slate-900 font-semibold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Mi aprendizaje
+            </button>
+          )}
         </nav>
       </div>
 

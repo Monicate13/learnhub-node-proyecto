@@ -8,6 +8,7 @@ interface TransactionsCenterProps {
   onRefundTransaction: (id: string) => void
   onRetryTransaction: (id: string) => void
   onNavigate: (view: string) => void
+  onRefresh?: () => void
 }
 
 export default function TransactionsCenter({
@@ -16,6 +17,7 @@ export default function TransactionsCenter({
   onRefundTransaction,
   onRetryTransaction,
   onNavigate,
+  onRefresh,
 }: TransactionsCenterProps) {
   const [activeTab, setActiveTab] = useState<'transactions' | 'students'>('transactions')
   const [search, setSearch] = useState('')
@@ -53,12 +55,25 @@ export default function TransactionsCenter({
     <div className="flex min-h-screen bg-slate-50">
       <AdminNav activeSection="finance" onNavigate={onNavigate} />
       <main className="flex-1 p-8">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          ADMINISTRACIÓN
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              ADMINISTRACIÓN
+            </div>
+            <h1 className="text-2xl font-extrabold text-slate-900">
+              Centro de finanzas y usuarios
+            </h1>
+          </div>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer flex items-center gap-1.5 shadow-xs transition"
+            >
+              <span>🔄</span>
+              <span>Actualizar transacciones</span>
+            </button>
+          )}
         </div>
-        <h1 className="text-2xl font-extrabold text-slate-900 mb-5">
-          Centro de finanzas y usuarios
-        </h1>
 
         {/* Pestañas: Transacciones vs Estudiantes (Figura 8 del informe) */}
         <div className="flex gap-6 border-b border-slate-200 mb-6">

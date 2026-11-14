@@ -1,6 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 1. Cargar variables de entorno desde server/.env
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 // Importar rutas modulares
 import authRoutes from "./src/routes/auth.routes.js";
@@ -8,10 +16,7 @@ import cursosRoutes from "./src/routes/cursos.routes.js";
 import aprendizajeRoutes from "./src/routes/aprendizaje.routes.js";
 import pagosRoutes from "./src/routes/pagos.routes.js";
 import adminRoutes from "./src/routes/admin.routes.js";
-import { pool } from "./src/config/db.js";
-
-// 1. Cargar variables de entorno
-dotenv.config();
+import { pool, probarConexion } from "./src/config/db.js";
 
 // 2. Inicializar Express
 const app = express();
@@ -19,7 +24,8 @@ const PORT = process.env.PORT || 4000;
 
 // 3. Middlewares globales
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 // 4. Montar rutas de la API de LearnHub
 app.use("/api/auth", authRoutes);
@@ -81,7 +87,8 @@ app.use((err, req, res, next) => {
 });
 
 // 5. Iniciar servidor
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await probarConexion();
   console.log(`================================================================`);
   console.log(` LearnHub API Backend ejecutándose en: http://localhost:${PORT}`);
   console.log(` Consulta de estado: http://localhost:${PORT}/api/status`);

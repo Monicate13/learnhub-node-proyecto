@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { registro, login, perfil } from "../controllers/auth.controller.js";
+import { 
+  registro, 
+  login, 
+  perfil, 
+  actualizarPerfil, 
+  cambiarPassword 
+} from "../controllers/auth.controller.js";
 import { verificarToken } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -8,7 +14,9 @@ const router = Router();
 router.post("/registro", registro);
 router.post("/login", login);
 
-// Rutas protegidas
+// Rutas protegidas (requieren sesión activa)
 router.get("/perfil", verificarToken, perfil);
+router.put("/perfil", verificarToken, actualizarPerfil);
+router.put("/cambiar-password", verificarToken, cambiarPassword);
 
 export default router;
