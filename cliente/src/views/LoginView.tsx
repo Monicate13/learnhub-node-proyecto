@@ -71,8 +71,8 @@ export default function LoginView({
 
       const backendUser: UserData = {
         id: res.usuario?.id_usuario || Date.now(),
-        nombre: res.usuario?.nombre || 'Usuario',
-        apellido: res.usuario?.apellido || '',
+        nombre: userRole === 'admin' ? 'Administrador' : (res.usuario?.nombre || 'Usuario'),
+        apellido: userRole === 'admin' ? '' : (res.usuario?.apellido || ''),
         correo: res.usuario?.correo || email,
         role: userRole,
         hasMembership: userRole === 'admin' || userRole === 'teacher',
@@ -119,8 +119,8 @@ export default function LoginView({
 
         onLogin({
           id: Date.now(),
-          nombre: fallbackRole === 'admin' ? 'Roberto' : fallbackRole === 'teacher' ? 'Carlos' : 'Estudiante',
-          apellido: fallbackRole === 'admin' ? 'Cruz' : fallbackRole === 'teacher' ? 'Mendoza' : 'Nuevo',
+          nombre: fallbackRole === 'admin' ? 'Administrador' : fallbackRole === 'teacher' ? 'Carlos' : 'Estudiante',
+          apellido: fallbackRole === 'admin' ? '' : fallbackRole === 'teacher' ? 'Mendoza' : 'Nuevo',
           correo: email,
           role: fallbackRole,
           hasMembership: fallbackRole === 'admin' || fallbackRole === 'teacher',

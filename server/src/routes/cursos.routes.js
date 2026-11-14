@@ -6,6 +6,8 @@ import {
   obtenerForoCurso,
   crearPreguntaForo,
   responderPreguntaForo,
+  eliminarPreguntaForo,
+  eliminarRespuestaForo,
   obtenerNotasCurso,
   guardarNotaCurso,
   actualizarNotaCurso,
@@ -32,6 +34,8 @@ router.get("/:id/estudiantes", verificarToken, soloAdminODocente, obtenerEstudia
 router.get("/:id/foro", obtenerForoCurso);
 router.post("/:id/foro", verificarToken, crearPreguntaForo);
 router.post("/:id/foro/:idPregunta/responder", verificarToken, responderPreguntaForo);
+router.delete("/:id/foro/:idPregunta", verificarToken, eliminarPreguntaForo);
+router.delete("/:id/foro/:idPregunta/respuestas/:idRespuesta", verificarToken, eliminarRespuestaForo);
 
 // Notas Personales en el Aula Virtual
 router.get("/:id/notas", verificarToken, obtenerNotasCurso);

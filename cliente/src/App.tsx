@@ -18,6 +18,7 @@ import AdminOverview from './views/admin/AdminOverview'
 import CatalogManagement from './views/admin/CatalogManagement'
 import CourseEditor from './views/admin/CourseEditor'
 import TransactionsCenter from './views/admin/TransactionsCenter'
+import UserManagement from './views/admin/UserManagement'
 import CookieBanner from './components/CookieBanner'
 import WhatsAppButton from './components/WhatsAppButton'
 import LegalModal from './components/LegalModal'
@@ -1218,6 +1219,11 @@ export default function App() {
           onRetryTransaction={handleRetryTransaction}
           onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
           onRefresh={cargarTransacciones}
+        />
+      )}
+      {currentView === 'admin-users' && (
+        <UserManagement
+          onNavigate={(view) => (view === 'login' ? handleLogout() : setCurrentView(view))}
         />
       )}
 

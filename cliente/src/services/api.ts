@@ -3,7 +3,7 @@
 
 import { type CourseItem } from '../views/CatalogView';
 
-export const API_BASE_URL = "https://learnhub-node-backend.vercel.app/api";
+export const API_BASE_URL = "http://localhost:4000/api"; //https://learnhub-node-backend.vercel.app/api
 
 // Helper para obtener el token JWT guardado
 export const getAuthToken = (): string | null => {
@@ -498,6 +498,80 @@ export const apiObtenerEstudiantesCurso = async (idCurso: number) => {
   });
   if (!res.ok) throw new Error('Error al obtener lista de estudiantes');
   return res.json();
+};
+
+// 25. Eliminar pregunta del Foro (DELETE /api/cursos/:id/foro/:idPregunta)
+export const apiEliminarPreguntaForo = async (idCurso: number, idPregunta: number) => {
+  const jwt = getAuthToken();
+  const res = await fetch(`${API_BASE_URL}/cursos/${idCurso}/foro/${idPregunta}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al eliminar la pregunta');
+  return data;
+};
+
+// 26. Eliminar respuesta del Foro (DELETE /api/cursos/:id/foro/:idPregunta/respuestas/:idRespuesta)
+export const apiEliminarRespuestaForo = async (idCurso: number, idPregunta: number, idRespuesta: number) => {
+  const jwt = getAuthToken();
+  const res = await fetch(`${API_BASE_URL}/cursos/${idCurso}/foro/${idPregunta}/respuestas/${idRespuesta}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al eliminar la respuesta');
+  return data;
+};
+
+// 27. Buscar y obtener usuarios registrados en MySQL (GET /api/admin/usuarios?busqueda=...)
+export const apiObtenerUsuariosAdmin = async (busqueda?: string) => {
+  const jwt = getAuthToken();
+  const query = busqueda ? `?busqueda=${encodeURIComponent(busqueda)}` : '';
+  const res = await fetch(`${API_BASE_URL}/admin/usuarios${query}`, {
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al obtener usuarios');
+  return data;
+};
+
+// 28. Actualizar rol de un usuario en MySQL (PUT /api/admin/usuarios/:id/rol)
+export const apiActualizarRolUsuario = async (idUsuario: number, idRol: number) => {
+  const jwt = getAuthToken();
+  const res = await fetch(`${API_BASE_URL}/admin/usuarios/${idUsuario}/rol`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ id_rol: idRol }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al actualizar el rol');
+  return data;
+};
+
+// 29. Otorgar o revocar membresía VIP en MySQL (PUT /api/admin/usuarios/:id/membresia)
+export const apiActualizarMembresiaUsuario = async (idUsuario: number, activa: boolean) => {
+  const jwt = getAuthToken();
+  const res = await fetch(`${API_BASE_URL}/admin/usuarios/${idUsuario}/membresia`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ activa }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al actualizar la membresía VIP');
+  return data;
 };
 
 

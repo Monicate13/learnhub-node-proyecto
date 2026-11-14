@@ -4,7 +4,10 @@ import {
   crearCurso, 
   actualizarCurso, 
   eliminarCurso,
-  obtenerTransacciones 
+  obtenerTransacciones,
+  obtenerUsuariosAdmin,
+  actualizarRolUsuario,
+  actualizarMembresiaUsuario
 } from "../controllers/admin.controller.js";
 import { verificarToken, soloAdmin, soloAdminODocente } from "../middlewares/auth.middleware.js";
 
@@ -21,5 +24,10 @@ router.delete("/cursos/:id", soloAdminODocente, eliminarCurso);
 // Métricas y Finanzas: Exclusivo para Administradores
 router.get("/dashboard", soloAdmin, obtenerMetricasDashboard);
 router.get("/transacciones", soloAdmin, obtenerTransacciones);
+
+// Gestión de Usuarios y Roles: Exclusivo para Administradores
+router.get("/usuarios", soloAdmin, obtenerUsuariosAdmin);
+router.put("/usuarios/:id/rol", soloAdmin, actualizarRolUsuario);
+router.put("/usuarios/:id/membresia", soloAdmin, actualizarMembresiaUsuario);
 
 export default router;

@@ -189,7 +189,9 @@ export default function CourseEditor({
   const [durationHours, setDurationHours] = useState<number>(initDur.hours)
   const [durationMinutes, setDurationMinutes] = useState<number>(initDur.minutes)
 
-  const [price, setPrice] = useState<number>(initialCourse?.price || 79)
+  const [price, setPrice] = useState<number>(
+    initialCourse?.price !== undefined ? Number(initialCourse.price) : 79
+  )
   const [modeloCobro, setModeloCobro] = useState<'Ambos' | 'Individual' | 'Membresia'>(
     initialCourse?.modelo_cobro || 'Ambos'
   )
@@ -265,7 +267,7 @@ export default function CourseEditor({
     setDurationHours(parsed.hours)
     setDurationMinutes(parsed.minutes)
 
-    setPrice(initialCourse?.price ?? 79)
+    setPrice(initialCourse?.price !== undefined ? Number(initialCourse.price) : 79)
     setModeloCobro(initialCourse?.modelo_cobro || 'Ambos')
     setStatus(initialCourse?.status || 'PUBLICADO')
     setImage(
@@ -579,7 +581,7 @@ export default function CourseEditor({
       students: initialCourse?.students ?? 0,
       duration: durationStr,
       lessons: totalLessonsCount || 1,
-      price: Number(price) || 49,
+      price: isNaN(Number(price)) ? 0 : Number(price),
       modelo_cobro: modeloCobro,
       status: targetStatus,
       image,
@@ -1088,7 +1090,10 @@ export default function CourseEditor({
                       min={0}
                       disabled={modeloCobro === 'Membresia'}
                       value={price}
-                      onChange={(e) => setPrice(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPrice(val === '' ? 0 : Number(val));
+                      }}
                       className="w-full pl-8 pr-4 py-2.5 text-sm font-extrabold border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </div>

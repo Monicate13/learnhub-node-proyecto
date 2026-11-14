@@ -17,7 +17,8 @@ export default function AppNav({
   userRole = 'student',
   onOpenProfile,
 }: AppNavProps) {
-  const initials = userName
+  const displayName = userRole === 'admin' ? 'Administrador' : userName
+  const initials = (userRole === 'admin' ? 'AD' : displayName)
     .split(' ')
     .map((n) => n[0])
     .join('')
@@ -108,7 +109,7 @@ export default function AppNav({
             {initials}
           </div>
           <span className="text-xs font-semibold text-slate-700 hidden sm:inline">
-            {userName}
+            {displayName}
           </span>
         </button>
 

@@ -5,11 +5,14 @@ import {
   apiObtenerForo,
   apiCrearPreguntaForo,
   apiResponderPreguntaForo,
+  apiEliminarPreguntaForo,
+  apiEliminarRespuestaForo,
   apiObtenerNotas,
   apiGuardarNota,
   apiEliminarNota,
   apiActualizarRecursos,
   apiActualizarDescripcion,
+  apiActualizarCurso,
 } from '../services/api'
 
 interface PlayerViewProps {
@@ -304,7 +307,20 @@ export default function PlayerView({
     if (course.recursos && course.recursos.length > 0) setResources(course.recursos)
   }, [course.id])
 
-  const modules = getExtendedModulesForCourse(course)
+  // Módulos y Portada editables por Docente / Admin
+  const [localModules, setLocalModules] = useState(() => getExtendedModulesForCourse(course))
+  const [localCourseImage, setLocalCourseImage] = useState(course.image)
+  const [showVideoModal, setShowVideoModal] = useState(false)
+  const [editVideoUrl, setEditVideoUrl] = useState('')
+  const [editCoverImageUrl, setEditCoverImageUrl] = useState('')
+  const [savingVideo, setSavingVideo] = useState(false)
+
+  useEffect(() => {
+    setLocalModules(getExtendedModulesForCourse(course))
+    setLocalCourseImage(course.image)
+  }, [course])
+
+  const modules = localModules
   const examQuestions = getExamQuestionsForCourse(course)
 
   const allLessonsFlat: { modIdx: number; lesIdx: number; key: string; title: string; time: string }[] = []
@@ -333,6 +349,107 @@ export default function PlayerView({
 
   // Verificar si la lección actual tiene un video asignado (URL personalizada o diccionario)
   const customYoutubeUrl = (currentLesson as any)?.video_url || LESSON_YOUTUBE_VIDEOS[currentLessonKey]
+
+  const normalizeYoutubeEmbed = (url: string) => {
+    if (!url) return ''
+    const trimmed = url.trim()
+    if (trimmed.includes('youtube.com/watch')) {
+      try {
+        const u = new URL(trimmed)
+        const v = u.searchParams.get('v')
+        if (v) return `https://www.youtube.com/embed/${v}`
+      } catch {}
+    }
+    if (trimmed.includes('youtu.be/')) {
+      const parts = trimmed.split('youtu.be/')
+      if (parts[1]) {
+        const vid = parts[1].split('?')[0].split('/')[0]
+        if (vid) return `https://www.youtube.com/embed/${vid}`
+      }
+    }
+    return trimmed
+  }
+
+  const handleOpenVideoModal = () => {
+    setEditVideoUrl((currentLesson as any)?.video_url || LESSON_YOUTUBE_VIDEOS[currentLessonKey] || '')
+    setEditCoverImageUrl(localCourseImage || course.image || '')
+    setShowVideoModal(true)
+  }
+
+  const handleSaveVideoAndCover = async () => {
+    setSavingVideo(true)
+    try {
+      const formattedVideo = normalizeYoutubeEmbed(editVideoUrl)
+      const updatedModules = JSON.parse(JSON.stringify(modules))
+      if (updatedModules[activeModuleIdx]?.lessons[activeLessonIdx]) {
+        updatedModules[activeModuleIdx].lessons[activeLessonIdx].video_url = formattedVideo
+      }
+
+      const newCover = editCoverImageUrl.trim() || localCourseImage
+
+      // Guardar en MySQL
+      await apiActualizarCurso(course.id, {
+        modules: updatedModules,
+        imagen_url: newCover,
+      })
+
+      setLocalModules(updatedModules)
+      setLocalCourseImage(newCover)
+
+      const updatedCourse: CourseItem = {
+        ...course,
+        image: newCover,
+        modules: updatedModules,
+      }
+      if (onUpdateCourse) {
+        onUpdateCourse(updatedCourse)
+      }
+
+      setShowVideoModal(false)
+    } catch (err: any) {
+      alert('Error al guardar el video: ' + (err.message || 'Error desconocido'))
+    } finally {
+      setSavingVideo(false)
+    }
+  }
+
+  const handleDeleteQuestion = async (qId: number) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta pregunta del foro?')) {
+      return
+    }
+    try {
+      await apiEliminarPreguntaForo(course.id, qId)
+      setQuestions((prev) => prev.filter((q) => q.id !== qId))
+    } catch (err: any) {
+      console.warn('Eliminando pregunta en estado local:', err.message)
+      setQuestions((prev) => prev.filter((q) => q.id !== qId))
+    }
+  }
+
+  const handleDeleteReply = async (qId: number, repId: number) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta respuesta?')) {
+      return
+    }
+    try {
+      await apiEliminarRespuestaForo(course.id, qId, repId)
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === qId
+            ? { ...q, replies: (q.replies || []).filter((r: any) => r.id !== repId) }
+            : q
+        )
+      )
+    } catch (err: any) {
+      console.warn('Eliminando respuesta en estado local:', err.message)
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === qId
+            ? { ...q, replies: (q.replies || []).filter((r: any) => r.id !== repId) }
+            : q
+        )
+      )
+    }
+  }
 
   const toggleModuleAccordion = (idx: number) => {
     setOpenModules((prev) =>
@@ -832,7 +949,7 @@ export default function PlayerView({
                     controls
                     autoPlay
                     className="w-full h-full object-cover"
-                    poster={course.image}
+                    poster={localCourseImage}
                   >
                     <source
                       src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
@@ -845,7 +962,7 @@ export default function PlayerView({
                 <div
                   className="w-full h-full bg-cover bg-center flex flex-col items-center justify-center relative"
                   style={{
-                    backgroundImage: `linear-gradient(rgba(9,11,17,0.55), rgba(9,11,17,0.88)), url('${course.image}')`,
+                    backgroundImage: `linear-gradient(rgba(9,11,17,0.55), rgba(9,11,17,0.88)), url('${localCourseImage}')`,
                   }}
                 >
                   <span className="px-3 py-1 rounded-full bg-violet-600/90 text-white text-[11px] font-bold mb-3">
@@ -863,6 +980,15 @@ export default function PlayerView({
                   <span className="text-xs text-slate-400 mt-1">
                     Duración de la clase: {currentLesson.time} · Instructor: {course.instructor}
                   </span>
+                  {canEditCourse && (
+                    <button
+                      type="button"
+                      onClick={handleOpenVideoModal}
+                      className="mt-3.5 px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-sm cursor-pointer transition border border-white/20"
+                    >
+                      🎥 Cambiar video / portada de esta clase
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -920,6 +1046,16 @@ export default function PlayerView({
                       className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
                     >
                       ⏹ Detener video
+                    </button>
+                  )}
+
+                  {canEditCourse && (
+                    <button
+                      type="button"
+                      onClick={handleOpenVideoModal}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold border border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100 cursor-pointer flex items-center gap-1.5 transition"
+                    >
+                      🎥 Cambiar video / portada
                     </button>
                   )}
 
@@ -1473,6 +1609,13 @@ export default function PlayerView({
                   ) : (
                     questions.map((q) => {
                       const isTeacherQuestion = q.role === 'Docente'
+                      const isMyQuestion = Boolean(
+                        (currentUser?.id && q.id_usuario === currentUser.id) ||
+                        (currentUser?.nombre && q.user?.toLowerCase().includes(currentUser.nombre.toLowerCase())) ||
+                        (currentUser?.correo && q.correo === currentUser.correo)
+                      )
+                      const canDeleteQuestion = currentUser?.role === 'admin' || isMyQuestion
+
                       return (
                         <div key={q.id} className="p-4 rounded-xl border border-slate-200 text-xs space-y-3 bg-white">
                           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
@@ -1493,7 +1636,19 @@ export default function PlayerView({
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-slate-400">{q.date}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-400">{q.date}</span>
+                              {canDeleteQuestion && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuestion(q.id)}
+                                  title="Eliminar pregunta del foro"
+                                  className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded transition cursor-pointer flex items-center gap-1 text-[11px]"
+                                >
+                                  🗑️ <span className="hidden sm:inline text-[10px]">Eliminar</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           <p className="text-slate-800 font-medium leading-relaxed">{q.question}</p>
@@ -1501,7 +1656,15 @@ export default function PlayerView({
                           {/* Respuestas anidadas en el hilo */}
                           {q.replies && q.replies.length > 0 && (
                             <div className="space-y-2 pl-3 border-l-2 border-violet-200 pt-1">
-                              {q.replies.map((rep: any, rIdx: number) => (
+                              {q.replies.map((rep: any, rIdx: number) => {
+                                const isMyReply = Boolean(
+                                  (currentUser?.id && rep.id_usuario === currentUser.id) ||
+                                  (currentUser?.nombre && rep.user?.toLowerCase().includes(currentUser.nombre.toLowerCase())) ||
+                                  (currentUser?.correo && rep.correo === currentUser.correo)
+                                )
+                                const canDeleteReply = currentUser?.role === 'admin' || isMyReply
+
+                                return (
                                 <div
                                   key={rIdx}
                                   className={`p-3 rounded-xl border ${
@@ -1519,11 +1682,24 @@ export default function PlayerView({
                                         </span>
                                       )}
                                     </div>
-                                    <span className="text-[10px] text-slate-400">{rep.date}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-slate-400">{rep.date}</span>
+                                      {canDeleteReply && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteReply(q.id, rep.id)}
+                                          title="Eliminar respuesta"
+                                          className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-0.5 rounded transition cursor-pointer text-[10px] flex items-center gap-0.5"
+                                        >
+                                          🗑️ <span className="hidden sm:inline text-[9px]">Eliminar</span>
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                   <p className="text-xs leading-relaxed">{rep.text}</p>
                                 </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
 
@@ -1716,6 +1892,95 @@ export default function PlayerView({
           </aside>
         )}
       </div>
+
+      {/* MODAL PARA CAMBIAR VIDEO Y PORTADA (DOCENTE Y ADMIN) */}
+      {showVideoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>🎥</span> Configurar Video y Portada
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Clase: <strong className="text-slate-800">{currentLesson.title}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowVideoModal(false)}
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  URL del Video de la lección (YouTube o MP4 directo)
+                </label>
+                <input
+                  type="url"
+                  value={editVideoUrl}
+                  onChange={(e) => setEditVideoUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... o https://youtu.be/..."
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 focus:bg-white"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Puedes pegar un enlace normal de YouTube o MP4 (se adapta automáticamente al reproductor).
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  URL de la Imagen de Portada del curso
+                </label>
+                <input
+                  type="url"
+                  value={editCoverImageUrl}
+                  onChange={(e) => setEditCoverImageUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/photo-..."
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 focus:bg-white"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Esta imagen se muestra como portada del reproductor de video.
+                </p>
+                {editCoverImageUrl && (
+                  <div className="mt-2.5 rounded-xl overflow-hidden border border-slate-200 h-28 w-full bg-slate-100 flex items-center justify-center">
+                    <img
+                      src={editCoverImageUrl}
+                      alt="Vista previa de portada"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        ;(e.target as HTMLElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={savingVideo}
+                  onClick={() => setShowVideoModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={savingVideo}
+                  onClick={handleSaveVideoAndCover}
+                  className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {savingVideo ? 'Guardando en MySQL...' : 'Guardar en MySQL'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

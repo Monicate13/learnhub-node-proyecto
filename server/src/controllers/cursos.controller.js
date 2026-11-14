@@ -321,6 +321,82 @@ export const responderPreguntaForo = async (req, res) => {
   }
 };
 
+export const eliminarPreguntaForo = async (req, res) => {
+  try {
+    const idPregunta = parseInt(req.params.idPregunta);
+    const [rows] = await pool.query(
+      "SELECT id_pregunta, id_usuario FROM Foro_Pregunta WHERE id_pregunta = ?",
+      [idPregunta]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Pregunta no encontrada" });
+    }
+
+    const pregunta = rows[0];
+    const esAdmin = req.usuario.id_rol === 2 || req.usuario.rol === "Administrador";
+    const esAutor = Number(req.usuario.id_usuario) === Number(pregunta.id_usuario);
+
+    if (!esAdmin && !esAutor) {
+      return res.status(403).json({ error: "No tienes permisos para eliminar esta pregunta" });
+    }
+
+    await pool.query("DELETE FROM Foro_Pregunta WHERE id_pregunta = ?", [idPregunta]);
+    res.json({ mensaje: "Pregunta eliminada correctamente del foro", id_pregunta: idPregunta });
+  } catch (error) {
+    console.error("Error en eliminarPreguntaForo:", error);
+    res.status(500).json({ error: "Error al eliminar la pregunta del foro" });
+  }
+};
+
+export const eliminarRespuestaForo = async (req, res) => {
+  try {
+    const idPregunta = parseInt(req.params.idPregunta);
+    const idRespuesta = parseInt(req.params.idRespuesta);
+
+    const [rows] = await pool.query(
+      "SELECT id_pregunta, respuestas FROM Foro_Pregunta WHERE id_pregunta = ?",
+      [idPregunta]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Pregunta no encontrada" });
+    }
+
+    let respuestas = [];
+    if (rows[0].respuestas) {
+      try {
+        respuestas = typeof rows[0].respuestas === 'string' ? JSON.parse(rows[0].respuestas) : rows[0].respuestas;
+      } catch {
+        respuestas = [];
+      }
+    }
+
+    const idx = respuestas.findIndex((r) => Number(r.id) === idRespuesta);
+    if (idx === -1) {
+      return res.status(404).json({ error: "Respuesta no encontrada" });
+    }
+
+    const rep = respuestas[idx];
+    const esAdmin = req.usuario.id_rol === 2 || req.usuario.rol === "Administrador";
+    const esAutor = Number(req.usuario.id_usuario) === Number(rep.id_usuario);
+
+    if (!esAdmin && !esAutor) {
+      return res.status(403).json({ error: "No tienes permisos para eliminar esta respuesta" });
+    }
+
+    respuestas.splice(idx, 1);
+
+    await pool.query(
+      "UPDATE Foro_Pregunta SET respuestas = ? WHERE id_pregunta = ?",
+      [JSON.stringify(respuestas), idPregunta]
+    );
+
+    res.json({ mensaje: "Respuesta eliminada correctamente", respuestas });
+  } catch (error) {
+    console.error("Error en eliminarRespuestaForo:", error);
+    res.status(500).json({ error: "Error al eliminar la respuesta" });
+  }
+};
+
 // =========================================================================
 // NOTAS PERSONALES DEL AULA VIRTUAL (Persistencia en MySQL)
 // =========================================================================

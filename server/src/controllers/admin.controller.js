@@ -257,7 +257,11 @@ export const actualizarCurso = async (req, res) => {
       if (!MODELOS.includes(modelo_cobro)) return res.status(400).json({ error: "Modelo de cobro inválido" });
       sets.push("modelo_cobro = ?"); params.push(modelo_cobro);
     }
-    if (precio !== undefined) { sets.push("precio = ?"); params.push(parseFloat(precio) || 0); }
+    if (precio !== undefined) {
+      const p = parseFloat(precio);
+      sets.push("precio = ?");
+      params.push(isNaN(p) ? 0 : p);
+    }
 
     const estadoRaw = estado_publicacion || status;
     if (estadoRaw !== undefined) {
@@ -476,5 +480,155 @@ export const obtenerTransacciones = async (req, res) => {
   } catch (error) {
     console.error("Error en obtenerTransacciones:", error);
     res.status(500).json({ error: "Error al consultar las transacciones" });
+  }
+};
+
+// =========================================================================
+// GESTIÓN DE USUARIOS Y ROLES (Buscar usuario por correo, rol y membresía)
+// =========================================================================
+export const obtenerUsuariosAdmin = async (req, res) => {
+  try {
+    const { busqueda } = req.query;
+    let query = `
+      SELECT 
+        u.id_usuario,
+        u.nombre,
+        u.apellido,
+        u.correo,
+        u.estado,
+        u.id_rol,
+        r.nombre_rol AS rol,
+        COALESCE(
+          (SELECT s.estado FROM Suscripcion s 
+           WHERE s.id_usuario = u.id_usuario AND s.estado = 'Activa' AND s.fecha_vencimiento > NOW() 
+           ORDER BY s.fecha_vencimiento DESC LIMIT 1),
+          'Inactiva'
+        ) AS estado_suscripcion,
+        (SELECT s.fecha_vencimiento FROM Suscripcion s 
+         WHERE s.id_usuario = u.id_usuario AND s.estado = 'Activa' AND s.fecha_vencimiento > NOW() 
+         ORDER BY s.fecha_vencimiento DESC LIMIT 1) AS fecha_vencimiento
+      FROM Usuario u
+      JOIN Rol r ON r.id_rol = u.id_rol
+    `;
+    const params = [];
+    if (busqueda && busqueda.trim()) {
+      query += ` WHERE LOWER(u.correo) LIKE LOWER(?) OR LOWER(u.nombre) LIKE LOWER(?) OR LOWER(u.apellido) LIKE LOWER(?)`;
+      const term = `%${busqueda.trim()}%`;
+      params.push(term, term, term);
+    }
+    query += ` ORDER BY u.id_usuario DESC`;
+
+    const [usuarios] = await pool.query(query, params);
+
+    res.json({
+      total: usuarios.length,
+      usuarios: usuarios.map((u) => ({
+        id_usuario: u.id_usuario,
+        nombre: u.nombre,
+        apellido: u.apellido,
+        correo: u.correo,
+        estado: u.estado,
+        id_rol: u.id_rol,
+        rol: u.rol,
+        tieneMembresia: u.estado_suscripcion === "Activa",
+        fecha_vencimiento: u.fecha_vencimiento,
+      })),
+    });
+  } catch (error) {
+    console.error("Error en obtenerUsuariosAdmin:", error);
+    res.status(500).json({ error: "Error al obtener los usuarios de la base de datos" });
+  }
+};
+
+export const actualizarRolUsuario = async (req, res) => {
+  try {
+    const idUsuario = parseInt(req.params.id);
+    const { id_rol } = req.body;
+    const rolNum = parseInt(id_rol);
+
+    if (![1, 2, 3].includes(rolNum)) {
+      return res.status(400).json({ error: "Rol inválido. Debe ser 1 (Estudiante), 2 (Administrador) o 3 (Docente)" });
+    }
+
+    const [result] = await pool.query(
+      "UPDATE Usuario SET id_rol = ? WHERE id_usuario = ?",
+      [rolNum, idUsuario]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const [roles] = await pool.query("SELECT nombre_rol FROM Rol WHERE id_rol = ?", [rolNum]);
+    const nombreRol = roles.length > 0 ? roles[0].nombre_rol : (rolNum === 3 ? "Docente" : rolNum === 2 ? "Administrador" : "Estudiante");
+
+    res.json({
+      mensaje: `Rol de usuario actualizado a ${nombreRol} con éxito`,
+      id_usuario: idUsuario,
+      id_rol: rolNum,
+      rol: nombreRol,
+    });
+  } catch (error) {
+    console.error("Error en actualizarRolUsuario:", error);
+    res.status(500).json({ error: "Error al actualizar el rol en la base de datos" });
+  }
+};
+
+export const actualizarMembresiaUsuario = async (req, res) => {
+  try {
+    const idUsuario = parseInt(req.params.id);
+    const { activa } = req.body;
+
+    const [usuario] = await pool.query("SELECT id_usuario, correo FROM Usuario WHERE id_usuario = ?", [idUsuario]);
+    if (usuario.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (activa) {
+      // Otorgar 6 meses de membresía VIP Pro en MySQL
+      const [planes] = await pool.query("SELECT id_plan FROM Plan_Membresia ORDER BY id_plan ASC LIMIT 1");
+      const idPlan = planes.length > 0 ? planes[0].id_plan : 1;
+
+      const vence = new Date();
+      vence.setMonth(vence.getMonth() + 6);
+
+      // Desactivar suscripciones previas si las hay
+      await pool.query("UPDATE Suscripcion SET estado = 'Inactiva' WHERE id_usuario = ?", [idUsuario]);
+
+      const [insertSusc] = await pool.query(
+        `INSERT INTO Suscripcion (id_usuario, id_plan, fecha_vencimiento, renovacion_automatica, estado)
+         VALUES (?, ?, ?, TRUE, 'Activa')`,
+        [idUsuario, idPlan, vence]
+      );
+
+      // Registrar una transacción de membresía otorgada por el admin
+      await pool.query(
+        `INSERT INTO Transaccion (id_transaccion, id_usuario, id_suscripcion, tipo, metodo_pago, monto, estado, referencia_pasarela, ultimos_digitos)
+         VALUES (?, ?, ?, 'Suscripcion', 'Concedida por Admin', 0.00, 'Aprobada', ?, 'ADMIN')`,
+        [Date.now(), idUsuario, insertSusc.insertId, `ADM-VIP-${Date.now()}`]
+      );
+
+      res.json({
+        mensaje: "Membresía VIP otorgada con éxito por 6 meses",
+        id_usuario: idUsuario,
+        tieneMembresia: true,
+        fecha_vencimiento: vence.toISOString(),
+      });
+    } else {
+      // Revocar membresía VIP
+      await pool.query(
+        "UPDATE Suscripcion SET estado = 'Cancelada', renovacion_automatica = FALSE WHERE id_usuario = ?",
+        [idUsuario]
+      );
+
+      res.json({
+        mensaje: "Membresía VIP revocada con éxito",
+        id_usuario: idUsuario,
+        tieneMembresia: false,
+      });
+    }
+  } catch (error) {
+    console.error("Error en actualizarMembresiaUsuario:", error);
+    res.status(500).json({ error: "Error al modificar la membresía en la base de datos" });
   }
 };

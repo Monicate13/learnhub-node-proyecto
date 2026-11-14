@@ -1,5 +1,5 @@
 interface AdminNavProps {
-  activeSection: 'overview' | 'catalog' | 'editor' | 'finance'
+  activeSection: 'overview' | 'catalog' | 'editor' | 'finance' | 'users'
   onNavigate: (view: string) => void
 }
 
@@ -8,6 +8,7 @@ export default function AdminNav({ activeSection, onNavigate }: AdminNavProps) {
     { id: 'overview', label: '⊞ Overview', view: 'admin-overview' },
     { id: 'catalog', label: '▤ Catálogo', view: 'admin-catalog' },
     { id: 'editor', label: '✎ Editor de cursos', view: 'admin-editor' },
+    { id: 'users', label: '👥 Buscar Usuario', view: 'admin-users' },
     { id: 'finance', label: '💳 Finanzas', view: 'admin-finance' },
   ]
 
@@ -47,11 +48,11 @@ export default function AdminNav({ activeSection, onNavigate }: AdminNavProps) {
       <div className="border-t border-slate-200 pt-4">
         <div className="flex items-center gap-2.5 px-2 mb-3">
           <div className="w-8 h-8 rounded-full bg-slate-800 text-white text-xs font-bold flex items-center justify-center">
-            RC
+            AD
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-900">Roberto Cruz</div>
-            <div className="text-[11px] text-slate-500">Administrador</div>
+            <div className="text-xs font-bold text-slate-900">Administrador</div>
+            <div className="text-[11px] text-slate-500">Super Admin</div>
           </div>
         </div>
         <button
