@@ -3,7 +3,7 @@
 
 import { type CourseItem } from '../views/CatalogView';
 
-export const API_BASE_URL = "http://localhost:4000/api";
+export const API_BASE_URL = "https://learnhub-node-backend.vercel.app/api";
 
 // Helper para obtener el token JWT guardado
 export const getAuthToken = (): string | null => {
