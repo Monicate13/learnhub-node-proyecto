@@ -5,11 +5,11 @@ interface AdminNavProps {
 
 export default function AdminNav({ activeSection, onNavigate }: AdminNavProps) {
   const items = [
-    { id: 'overview', label: '⊞ Overview', view: 'admin-overview' },
-    { id: 'catalog', label: '▤ Catálogo', view: 'admin-catalog' },
-    { id: 'editor', label: '✎ Editor de cursos', view: 'admin-editor' },
-    { id: 'users', label: '👥 Buscar Usuario', view: 'admin-users' },
-    { id: 'finance', label: '💳 Finanzas', view: 'admin-finance' },
+    { id: 'overview', label: ' Overview', view: 'admin-overview' },
+    { id: 'catalog', label: ' Catálogo', view: 'admin-catalog' },
+    { id: 'editor', label: ' Editor de cursos', view: 'admin-editor' },
+    { id: 'users', label: ' Buscar Usuario', view: 'admin-users' },
+    { id: 'finance', label: ' Finanzas', view: 'admin-finance' },
   ]
 
   return (

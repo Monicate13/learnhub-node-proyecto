@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { type CourseItem, type CourseResource } from './CatalogView'
 import { type UserData } from './LoginView'
+import ConfirmModal from '../components/ConfirmModal'
 import {
   apiObtenerForo,
   apiCrearPreguntaForo,
@@ -195,6 +196,8 @@ export default function PlayerView({
   const [courseDesc, setCourseDesc] = useState(course.description || '')
   const [isEditingDesc, setIsEditingDesc] = useState(false)
   const [descSuccess, setDescSuccess] = useState('')
+  const [isEditingLessonDesc, setIsEditingLessonDesc] = useState(false)
+  const [lessonDescText, setLessonDescText] = useState('')
 
   // Recursos de la materia
   const defaultResources: CourseResource[] = [
@@ -222,7 +225,7 @@ export default function PlayerView({
   ]
 
   const [resources, setResources] = useState<CourseResource[]>(() => {
-    return course.recursos && course.recursos.length > 0 ? course.recursos : defaultResources
+    return Array.isArray(course.recursos) ? course.recursos : defaultResources
   })
   const [showAddResForm, setShowAddResForm] = useState(false)
   const [newResName, setNewResName] = useState('')
@@ -239,58 +242,53 @@ export default function PlayerView({
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({})
   const [examSubmitted, setExamSubmitted] = useState(false)
 
-  // Notas personales conectadas a MySQL
-  const [notes, setNotes] = useState<{ id: number; lesson: string; text: string; time: string }[]>([
-    {
-      id: 1,
-      lesson: '1.1 Bienvenida, objetivos y mapa de ruta',
-      text: 'Importante: estructurar las capas separando controladores de servicios para mantener limpio el proyecto.',
-      time: '04:12',
-    },
-  ])
+  // Notas personales aisladas por curso (conectadas a MySQL)
+  const [notes, setNotes] = useState<{ id: number; lesson: string; text: string; time: string }[]>([])
   const [newNoteText, setNewNoteText] = useState('')
 
-  // Foro de Preguntas y Respuestas conectado a MySQL
-  const [questions, setQuestions] = useState<any[]>([
-    {
-      id: 1,
-      user: 'Diogo Valdivia',
-      role: 'Estudiante',
-      lesson: '1.1 Bienvenida y mapa del curso',
-      question: '¿Qué versión del entorno recomiendan para seguir los ejercicios prácticos sin conflictos?',
-      reply: `Hola Diogo, recomendamos usar la versión LTS actual. En la pestaña de Recursos descargables tienes la guía en PDF con la instalación paso a paso. — ${course.instructor}`,
-      date: 'hace 2 días',
-      replies: [
-        {
-          id: 101,
-          user: course.instructor || 'Profesor Carlos Mendoza',
-          role: 'Docente',
-          isInstructor: true,
-          text: 'Recomiendo instalar Node.js versión LTS (v20 o superior) y MySQL Workbench para la gestión visual.',
-          date: 'hace 1 día',
-        },
-      ],
-    },
-  ])
+  // Foro de Preguntas y Respuestas aislado por curso (conectado a MySQL)
+  const [questions, setQuestions] = useState<any[]>([])
   const [newQuestionText, setNewQuestionText] = useState('')
   const [activeReplyId, setActiveReplyId] = useState<number | null>(null)
   const [replyInputText, setReplyInputText] = useState('')
 
-  // Sincronización con Backend en MySQL
+  // Modal de confirmación minimalista para acciones destructivas
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    type: 'resource' | 'note' | 'question' | 'reply' | null
+    title: string
+    message: string
+    itemTitle?: string
+    badgeText?: string
+    data?: any
+    isLoading?: boolean
+  }>({
+    isOpen: false,
+    type: null,
+    title: '',
+    message: '',
+  })
+
+  // Sincronización aislada 1:1 con Backend en MySQL por Curso
   useEffect(() => {
-    // 1. Cargar preguntas reales del foro desde MySQL
+    // 1. Cargar preguntas reales del foro desde MySQL estrictamente para este curso
     apiObtenerForo(course.id)
       .then((data) => {
-        if (data && data.preguntas && data.preguntas.length > 0) {
+        if (data && Array.isArray(data.preguntas)) {
           setQuestions(data.preguntas)
+        } else {
+          setQuestions([])
         }
       })
-      .catch((err) => console.warn('Aviso: Foro cargado localmente:', err.message))
+      .catch((err) => {
+        console.warn('Aviso: Foro cargado localmente:', err.message)
+        setQuestions([])
+      })
 
-    // 2. Cargar notas personales desde MySQL
+    // 2. Cargar notas personales desde MySQL estrictamente para este curso
     apiObtenerNotas(course.id)
       .then((data) => {
-        if (data && data.notas && data.notas.length > 0) {
+        if (data && Array.isArray(data.notas)) {
           const mapped = data.notas.map((n: any) => ({
             id: n.id_nota,
             lesson: n.leccion,
@@ -298,14 +296,21 @@ export default function PlayerView({
             time: n.tiempo,
           }))
           setNotes(mapped)
+        } else {
+          setNotes([])
         }
       })
-      .catch((err) => console.warn('Aviso: Notas cargadas localmente:', err.message))
+      .catch((err) => {
+        console.warn('Aviso: Notas cargadas localmente:', err.message)
+        setNotes([])
+      })
 
-    // 3. Sincronizar descripción y recursos si vienen del curso
-    if (course.description) setCourseDesc(course.description)
-    if (course.recursos && course.recursos.length > 0) setResources(course.recursos)
-  }, [course.id])
+    // 3. Sincronizar descripción y recursos propios del curso
+    setCourseDesc(course.description || '')
+    if (Array.isArray(course.recursos)) {
+      setResources(course.recursos)
+    }
+  }, [course.id, course.description, course.recursos])
 
   // Módulos y Portada editables por Docente / Admin
   const [localModules, setLocalModules] = useState(() => getExtendedModulesForCourse(course))
@@ -413,41 +418,101 @@ export default function PlayerView({
     }
   }
 
-  const handleDeleteQuestion = async (qId: number) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar esta pregunta del foro?')) {
-      return
-    }
-    try {
-      await apiEliminarPreguntaForo(course.id, qId)
-      setQuestions((prev) => prev.filter((q) => q.id !== qId))
-    } catch (err: any) {
-      console.warn('Eliminando pregunta en estado local:', err.message)
-      setQuestions((prev) => prev.filter((q) => q.id !== qId))
-    }
+  // =========================================================================
+  // GESTIÓN DE ACCIONES DESTRUCTIVAS CON MODAL MINIMALISTA
+  // =========================================================================
+  const triggerDeleteResource = (res: CourseResource) => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'resource',
+      title: '¿Eliminar recurso descargable?',
+      message: 'Este archivo se eliminará permanentemente de este curso en la base de datos y no estará disponible para los alumnos.',
+      badgeText: 'Recurso PDF',
+      itemTitle: res.name,
+      data: { id: res.id },
+      isLoading: false,
+    })
   }
 
-  const handleDeleteReply = async (qId: number, repId: number) => {
-    if (!window.confirm('¿Estás seguro de que deseas eliminar esta respuesta?')) {
-      return
-    }
+  const triggerDeleteNote = (note: { id: number; text: string }) => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'note',
+      title: '¿Eliminar apunte personal?',
+      message: 'Esta nota se borrará permanentemente de tu cuenta y no podrá ser recuperada tras refrescar.',
+      badgeText: 'Nota Personal',
+      itemTitle: note.text,
+      data: { id: note.id },
+      isLoading: false,
+    })
+  }
+
+  const triggerDeleteQuestion = (q: any) => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'question',
+      title: '¿Eliminar pregunta del foro?',
+      message: 'La pregunta y todas sus respuestas asociadas se eliminarán permanentemente de la base de datos.',
+      badgeText: 'Foro Q&A',
+      itemTitle: q.question,
+      data: { qId: q.id },
+      isLoading: false,
+    })
+  }
+
+  const triggerDeleteReply = (qId: number, rep: any) => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'reply',
+      title: '¿Eliminar respuesta del foro?',
+      message: 'Este mensaje se eliminará permanentemente del hilo de discusión.',
+      badgeText: 'Respuesta',
+      itemTitle: rep.text,
+      data: { qId, repId: rep.id },
+      isLoading: false,
+    })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!confirmModal.data || !confirmModal.type) return
+    setConfirmModal((prev) => ({ ...prev, isLoading: true }))
+
     try {
-      await apiEliminarRespuestaForo(course.id, qId, repId)
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.id === qId
-            ? { ...q, replies: (q.replies || []).filter((r: any) => r.id !== repId) }
-            : q
+      if (confirmModal.type === 'resource') {
+        const { id } = confirmModal.data
+        const updated = resources.filter((r) => r.id !== id)
+        setResources(updated)
+        await apiActualizarRecursos(course.id, updated)
+        onUpdateCourse?.({ ...course, recursos: updated })
+      } else if (confirmModal.type === 'note') {
+        const { id } = confirmModal.data
+        setNotes((prev) => prev.filter((n) => n.id !== id))
+        await apiEliminarNota(course.id, id)
+      } else if (confirmModal.type === 'question') {
+        const { qId } = confirmModal.data
+        setQuestions((prev) => prev.filter((q) => q.id !== qId))
+        await apiEliminarPreguntaForo(course.id, qId)
+      } else if (confirmModal.type === 'reply') {
+        const { qId, repId } = confirmModal.data
+        setQuestions((prev) =>
+          prev.map((q) =>
+            q.id === qId
+              ? { ...q, replies: (q.replies || []).filter((r: any) => r.id !== repId) }
+              : q
+          )
         )
-      )
+        await apiEliminarRespuestaForo(course.id, qId, repId)
+      }
     } catch (err: any) {
-      console.warn('Eliminando respuesta en estado local:', err.message)
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.id === qId
-            ? { ...q, replies: (q.replies || []).filter((r: any) => r.id !== repId) }
-            : q
-        )
-      )
+      console.warn('Aviso al procesar eliminación en MySQL:', err.message)
+    } finally {
+      setConfirmModal({
+        isOpen: false,
+        type: null,
+        title: '',
+        message: '',
+        isLoading: false,
+      })
     }
   }
 
@@ -519,6 +584,29 @@ export default function PlayerView({
     }
   }
 
+  // Guardar descripción específica de la lección actual por Docente / Admin
+  const handleSaveLessonDescription = async () => {
+    try {
+      const updatedModules = JSON.parse(JSON.stringify(modules))
+      if (updatedModules[activeModuleIdx]?.lessons[activeLessonIdx]) {
+        updatedModules[activeModuleIdx].lessons[activeLessonIdx].description = lessonDescText.trim()
+      }
+      await apiActualizarCurso(course.id, { modules: updatedModules })
+      setLocalModules(updatedModules)
+      onUpdateCourse?.({ ...course, modules: updatedModules })
+      setIsEditingLessonDesc(false)
+      setDescSuccess('✓ Descripción de la lección actualizada con éxito en la base de datos.')
+      setTimeout(() => setDescSuccess(''), 3500)
+    } catch (err: any) {
+      alert('Error al guardar descripción de la lección: ' + err.message)
+    }
+  }
+
+  useEffect(() => {
+    setLessonDescText((currentLesson as any)?.description || '')
+    setIsEditingLessonDesc(false)
+  }, [currentLessonKey])
+
   // Gestión de Recursos por Docente / Admin
   const handleResourceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -565,19 +653,6 @@ export default function PlayerView({
     }
   }
 
-  const handleDeleteResource = async (id: string | number | undefined) => {
-    if (!id) return
-    if (!confirm('¿Seguro que deseas eliminar este recurso descargable?')) return
-    const updated = resources.filter((r) => r.id !== id)
-    setResources(updated)
-    try {
-      await apiActualizarRecursos(course.id, updated)
-      onUpdateCourse?.({ ...course, recursos: updated })
-    } catch (err: any) {
-      console.warn('Aviso al actualizar recursos en MySQL:', err.message)
-    }
-  }
-
   // Notas personales sincronizadas con MySQL
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -596,22 +671,14 @@ export default function PlayerView({
 
     try {
       const res = await apiGuardarNota(course.id, currentLessonName, textToSend, '10:24')
-      if (res && res.id_nota) {
+      const savedId = res?.id_nota || res?.nota?.id_nota
+      if (savedId) {
         setNotes((prev) =>
-          prev.map((n) => (n.id === tempId ? { ...n, id: res.id_nota } : n))
+          prev.map((n) => (n.id === tempId ? { ...n, id: savedId } : n))
         )
       }
     } catch (err: any) {
       console.warn('Nota guardada localmente:', err.message)
-    }
-  }
-
-  const handleDeleteNote = async (id: number) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id))
-    try {
-      await apiEliminarNota(course.id, id)
-    } catch (err: any) {
-      console.warn('Aviso al eliminar nota en MySQL:', err.message)
     }
   }
 
@@ -644,9 +711,10 @@ export default function PlayerView({
 
     try {
       const res = await apiCrearPreguntaForo(course.id, currentLessonName, questionText)
-      if (res && res.id_pregunta) {
+      const savedQId = res?.id_pregunta || res?.id || res?.pregunta?.id || res?.pregunta?.id_pregunta
+      if (savedQId) {
         setQuestions((prev) =>
-          prev.map((q) => (q.id === tempId ? { ...q, id: res.id_pregunta } : q))
+          prev.map((q) => (q.id === tempId ? { ...q, id: savedQId } : q))
         )
       }
     } catch (err: any) {
@@ -691,7 +759,7 @@ export default function PlayerView({
 
     try {
       const res = await apiResponderPreguntaForo(course.id, questionId, replyToSend)
-      if (res && res.respuestas) {
+      if (res && Array.isArray(res.respuestas)) {
         setQuestions((prev) =>
           prev.map((q) => (q.id === questionId ? { ...q, replies: res.respuestas } : q))
         )
@@ -1102,51 +1170,107 @@ export default function PlayerView({
               ))}
             </div>
 
-            {/* PESTAÑA 1: DESCRIPCIÓN (Específica de la clase + Metodología del curso) */}
+            {/* PESTAÑA 1: DESCRIPCIÓN (Específica de la clase + Metodología del curso - Estandarizada) */}
             {activeTab === 'desc' && (
-              <div className="space-y-5 max-w-3xl">
+              <div className="space-y-4 max-w-3xl">
+                {/* Banner superior estandarizado */}
+                <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>📋</span>
+                    <span>Información curricular, plan de estudios y contenidos de la materia.</span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    Sincronizado MySQL
+                  </span>
+                </div>
+
                 {descSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-between">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-between animate-in fade-in">
                     <span>{descSuccess}</span>
-                    <button onClick={() => setDescSuccess('')} className="text-emerald-700 hover:underline">✕</button>
+                    <button onClick={() => setDescSuccess('')} className="text-emerald-700 hover:underline cursor-pointer">✕</button>
                   </div>
                 )}
 
-                {/* Tarjeta de la Lección Actual */}
+                {/* Tarjeta 1: Lección Actual */}
                 <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700">
-                        CLASE ACTUAL
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700 uppercase tracking-wider">
+                        {isExamMode ? 'Evaluación' : 'Clase Actual'}
                       </span>
                       <h4 className="text-sm font-extrabold text-slate-900">
                         {isExamMode ? 'Evaluación Final del Curso' : currentLesson.title}
                       </h4>
                     </div>
-                    {!isExamMode && currentLesson.time && (
-                      <span className="text-xs font-mono font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-lg border border-violet-100">
-                        ⏱ {currentLesson.time}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {!isExamMode && currentLesson.time && (
+                        <span className="text-xs font-mono font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-lg border border-violet-100">
+                          ⏱ {currentLesson.time}
+                        </span>
+                      )}
+                      {canEditCourse && !isExamMode && !isEditingLessonDesc && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLessonDescText((currentLesson as any)?.description || '')
+                            setIsEditingLessonDesc(true)
+                          }}
+                          className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1"
+                        >
+                          ✏️ Editar lección
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="text-xs text-slate-600 leading-relaxed space-y-2">
-                    {isExamMode ? (
-                      <p>
-                        Examen oficial de comprobación de conocimientos. Evalúa todos los conceptos vistos en los módulos. Requiere nota mínima de 14/20 para aprobar y obtener tu certificación oficial en la plataforma.
-                      </p>
-                    ) : (
-                      <p>
-                        {(currentLesson as any)?.description ||
-                          `En esta lección revisamos la teoría, sintaxis y resolución práctica de "${currentLesson.title}". Acompaña la sesión con el código fuente y guías disponibles en la pestaña de Recursos, y anota tus reflexiones en la sección de Notas personales.`}
-                      </p>
-                    )}
-                  </div>
+                  {isEditingLessonDesc ? (
+                    <div className="space-y-3 pt-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        Descripción pedagógica para "{currentLesson.title}":
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={lessonDescText}
+                        onChange={(e) => setLessonDescText(e.target.value)}
+                        placeholder="Detalla los conceptos, librerías o ejercicios práctico de esta lección..."
+                        className="w-full p-3 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 bg-white"
+                      />
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingLessonDesc(false)}
+                          className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold rounded-xl cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveLessonDescription}
+                          className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs transition"
+                        >
+                          💾 Guardar en base de datos
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-600 leading-relaxed space-y-2">
+                      {isExamMode ? (
+                        <p>
+                          Examen oficial de comprobación de conocimientos. Evalúa todos los conceptos vistos en los módulos. Requiere nota mínima de 14/20 para aprobar y obtener tu certificación oficial en la plataforma.
+                        </p>
+                      ) : (
+                        <p className="whitespace-pre-line">
+                          {(currentLesson as any)?.description ||
+                            `En esta lección revisamos la teoría, sintaxis y resolución práctica de "${currentLesson.title}". Acompaña la sesión con el código fuente y guías disponibles en la pestaña de Recursos, y anota tus reflexiones en la sección de Notas personales.`}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Tarjeta de Metodología General del Curso */}
-                <div className="p-5 bg-slate-50/70 border border-slate-200 rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* Tarjeta 2: Metodología General del Curso */}
+                <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                       <span>📖</span>
                       <span>Metodología y Objetivos de la Materia</span>
@@ -1156,13 +1280,13 @@ export default function PlayerView({
                         onClick={() => setIsEditingDesc(true)}
                         className="px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1"
                       >
-                        ✏️ Modificar descripción (Docente)
+                        ✏️ Modificar descripción general
                       </button>
                     )}
                   </div>
 
                   {isEditingDesc ? (
-                    <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                       <label className="block text-xs font-bold text-slate-700">
                         Editor de descripción general para los estudiantes:
                       </label>
@@ -1196,6 +1320,33 @@ export default function PlayerView({
                         'Curso práctico orientado a la resolución de problemas reales, desarrollo de competencias tecnológicas modernas e inserción al mercado laboral.'}
                     </p>
                   )}
+                </div>
+
+                {/* Tarjeta 3: Ficha Técnica y Docente */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-violet-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
+                      👨‍🏫
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Instructor Asignado</div>
+                      <div className="text-slate-800 font-bold">{course.instructor || 'Docente Certificado'}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 text-slate-500">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">Categoría</span>
+                      <span className="font-semibold text-slate-700">{course.category}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">Nivel</span>
+                      <span className="font-semibold text-slate-700">{course.level}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">Módulos</span>
+                      <span className="font-semibold text-slate-700">{modules.length} módulos</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1440,7 +1591,7 @@ export default function PlayerView({
                             </a>
                             {canEditCourse && (
                               <button
-                                onClick={() => handleDeleteResource(res.id)}
+                                onClick={() => triggerDeleteResource(res)}
                                 title="Eliminar este recurso"
                                 className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold flex items-center justify-center cursor-pointer transition"
                               >
@@ -1532,7 +1683,7 @@ export default function PlayerView({
                           <div className="flex items-center gap-3">
                             <span className="text-slate-400">⏱ Minuto {n.time}</span>
                             <button
-                              onClick={() => handleDeleteNote(n.id)}
+                              onClick={() => triggerDeleteNote(n)}
                               title="Eliminar apunte"
                               className="text-slate-400 hover:text-rose-600 cursor-pointer font-bold text-xs"
                             >
@@ -1641,7 +1792,7 @@ export default function PlayerView({
                               {canDeleteQuestion && (
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteQuestion(q.id)}
+                                  onClick={() => triggerDeleteQuestion(q)}
                                   title="Eliminar pregunta del foro"
                                   className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded transition cursor-pointer flex items-center gap-1 text-[11px]"
                                 >
@@ -1687,7 +1838,7 @@ export default function PlayerView({
                                       {canDeleteReply && (
                                         <button
                                           type="button"
-                                          onClick={() => handleDeleteReply(q.id, rep.id)}
+                                          onClick={() => triggerDeleteReply(q.id, rep)}
                                           title="Eliminar respuesta"
                                           className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-0.5 rounded transition cursor-pointer text-[10px] flex items-center gap-0.5"
                                         >
@@ -1981,6 +2132,28 @@ export default function PlayerView({
           </div>
         </div>
       )}
+      {/* Modal de confirmación minimalista para acciones destructivas */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        badgeText={confirmModal.badgeText}
+        itemTitle={confirmModal.itemTitle}
+        confirmText="Sí, eliminar definitivamente"
+        cancelText="Cancelar"
+        isLoading={confirmModal.isLoading}
+        isDangerous={true}
+        onConfirm={handleConfirmDelete}
+        onClose={() =>
+          setConfirmModal({
+            isOpen: false,
+            type: null,
+            title: '',
+            message: '',
+            isLoading: false,
+          })
+        }
+      />
     </div>
   )
 }

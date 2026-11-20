@@ -1172,6 +1172,7 @@ export default function App() {
       )}
       {currentView === 'player' && (
         <PlayerView
+          key={currentPlayingCourse.id}
           course={currentPlayingCourse}
           completedLessonIds={courseProgress[currentPlayingCourse.id] || []}
           onToggleLessonComplete={handleToggleLessonComplete}

@@ -253,6 +253,7 @@ export const crearPreguntaForo = async (req, res) => {
 
     const nuevaPregunta = {
       id: result.insertId,
+      id_pregunta: result.insertId,
       user: nombreUsuario,
       role: rolUsuario,
       lesson: leccion || "General",
@@ -261,7 +262,12 @@ export const crearPreguntaForo = async (req, res) => {
       replies: [],
     };
 
-    res.status(201).json({ mensaje: "Pregunta publicada en el foro", pregunta: nuevaPregunta });
+    res.status(201).json({
+      mensaje: "Pregunta publicada en el foro",
+      pregunta: nuevaPregunta,
+      id_pregunta: result.insertId,
+      id: result.insertId,
+    });
   } catch (error) {
     console.error("Error en crearPreguntaForo:", error);
     res.status(500).json({ error: "Error al publicar la pregunta" });
@@ -435,6 +441,7 @@ export const guardarNotaCurso = async (req, res) => {
 
     res.status(201).json({
       mensaje: "Nota guardada con éxito",
+      id_nota: result.insertId,
       nota: {
         id_nota: result.insertId,
         id_curso: idCurso,
@@ -479,16 +486,20 @@ export const actualizarNotaCurso = async (req, res) => {
 export const eliminarNotaCurso = async (req, res) => {
   try {
     const idNota = parseInt(req.params.idNota);
+    const esAdmin = req.usuario.id_rol === 2 || req.usuario.rol === "Administrador";
+
     const [result] = await pool.query(
-      "DELETE FROM Nota_Estudiante WHERE id_nota = ? AND id_usuario = ?",
-      [idNota, req.usuario.id_usuario]
+      esAdmin
+        ? "DELETE FROM Nota_Estudiante WHERE id_nota = ?"
+        : "DELETE FROM Nota_Estudiante WHERE id_nota = ? AND id_usuario = ?",
+      esAdmin ? [idNota] : [idNota, req.usuario.id_usuario]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Nota no encontrada" });
+      return res.status(404).json({ error: "Nota no encontrada o no tienes permisos para eliminarla" });
     }
 
-    res.json({ mensaje: "Nota eliminada con éxito" });
+    res.json({ mensaje: "Nota eliminada con éxito", id_nota: idNota });
   } catch (error) {
     console.error("Error en eliminarNotaCurso:", error);
     res.status(500).json({ error: "Error al eliminar la nota" });

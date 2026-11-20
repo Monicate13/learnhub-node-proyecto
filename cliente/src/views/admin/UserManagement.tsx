@@ -162,7 +162,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar usuario por correo electrónico (ej. alumno@learnhub.com)..."
+                placeholder="Buscar usuario por correo electrónico (ej. alumno@learnhub.com)"
                 className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-violet-600 focus:bg-white"
               />
             </div>
@@ -187,21 +187,21 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
 
           {/* Tarjetas de Resumen Rápido */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-100 text-center">
-            <div className="p-2.5 bg-slate-50 rounded-xl">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Estudiantes</div>
+            <div className="p-2.5 bg-violet-50 rounded-xl">
+              <div className="text-[10px] font-bold text-violet-600 uppercase">Estudiantes</div>
               <div className="text-lg font-extrabold text-slate-900 mt-0.5">{studentCount}</div>
             </div>
             <div className="p-2.5 bg-violet-50 rounded-xl">
               <div className="text-[10px] font-bold text-violet-600 uppercase">Docentes</div>
-              <div className="text-lg font-extrabold text-violet-900 mt-0.5">{teacherCount}</div>
+              <div className="text-lg font-extrabold text-slate-900 mt-0.5">{teacherCount}</div>
             </div>
-            <div className="p-2.5 bg-amber-50 rounded-xl">
-              <div className="text-[10px] font-bold text-amber-700 uppercase">Administradores</div>
-              <div className="text-lg font-extrabold text-amber-900 mt-0.5">{adminCount}</div>
+            <div className="p-2.5 bg-violet-50 rounded-xl">
+              <div className="text-[10px] font-bold text-violet-600 uppercase">Administradores</div>
+              <div className="text-lg font-extrabold text-slate-900 mt-0.5">{adminCount}</div>
             </div>
-            <div className="p-2.5 bg-emerald-50 rounded-xl">
-              <div className="text-[10px] font-bold text-emerald-700 uppercase">Membresía VIP</div>
-              <div className="text-lg font-extrabold text-emerald-900 mt-0.5">{vipCount}</div>
+            <div className="p-2.5 bg-violet-50 rounded-xl">
+              <div className="text-[10px] font-bold text-violet-600 uppercase">Membresía VIP</div>
+              <div className="text-lg font-extrabold text-slate-900 mt-0.5">{vipCount}</div>
             </div>
           </div>
         </div>
@@ -216,7 +216,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
               onClick={() => fetchUsers(searchTerm)}
               className="text-xs text-violet-600 hover:underline font-semibold cursor-pointer"
             >
-              🔄 Recargar datos
+              Recargar datos
             </button>
           </div>
 
@@ -289,7 +289,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                         <td className="py-3 px-4">
                           {u.tieneMembresia ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              💎 VIP Activa
+                               VIP Activa
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
@@ -313,7 +313,7 @@ export default function UserManagement({ onNavigate }: UserManagementProps) {
                               ? 'Guardando...'
                               : u.tieneMembresia
                               ? '✕ Revocar VIP'
-                              : '💎 Dar Membresía VIP'}
+                              : ' Dar Membresía VIP'}
                           </button>
                         </td>
                       </tr>
